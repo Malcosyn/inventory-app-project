@@ -1,7 +1,3 @@
-// To parse this JSON data, do
-//
-//     final userModel = userModelFromJson(jsonString);
-
 import 'dart:convert';
 
 UserModel userModelFromJson(String str) => UserModel.fromJson(json.decode(str));
@@ -9,48 +5,13 @@ UserModel userModelFromJson(String str) => UserModel.fromJson(json.decode(str));
 String userModelToJson(UserModel data) => json.encode(data.toJson());
 
 class UserModel {
-  String accessToken;
-  String tokenType;
-  int expiresIn;
-  int expiresAt;
-  String refreshToken;
-  User user;
-
-  UserModel({
-    required this.accessToken,
-    required this.tokenType,
-    required this.expiresIn,
-    required this.expiresAt,
-    required this.refreshToken,
-    required this.user,
-  });
-
-  factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
-    accessToken: json["access_token"],
-    tokenType: json["token_type"],
-    expiresIn: json["expires_in"],
-    expiresAt: json["expires_at"],
-    refreshToken: json["refresh_token"],
-    user: User.fromJson(json["user"]),
-  );
-
-  Map<String, dynamic> toJson() => {
-    "access_token": accessToken,
-    "token_type": tokenType,
-    "expires_in": expiresIn,
-    "expires_at": expiresAt,
-    "refresh_token": refreshToken,
-    "user": user.toJson(),
-  };
-}
-
-class User {
   String id;
   String aud;
   String role;
   String email;
   DateTime emailConfirmedAt;
   String phone;
+  DateTime confirmedAt;
   DateTime lastSignInAt;
   AppMetadata appMetadata;
   Data userMetadata;
@@ -59,13 +20,14 @@ class User {
   DateTime updatedAt;
   bool isAnonymous;
 
-  User({
+  UserModel({
     required this.id,
     required this.aud,
     required this.role,
     required this.email,
     required this.emailConfirmedAt,
     required this.phone,
+    required this.confirmedAt,
     required this.lastSignInAt,
     required this.appMetadata,
     required this.userMetadata,
@@ -75,13 +37,14 @@ class User {
     required this.isAnonymous,
   });
 
-  factory User.fromJson(Map<String, dynamic> json) => User(
+  factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
     id: json["id"],
     aud: json["aud"],
     role: json["role"],
     email: json["email"],
     emailConfirmedAt: DateTime.parse(json["email_confirmed_at"]),
     phone: json["phone"],
+    confirmedAt: DateTime.parse(json["confirmed_at"]),
     lastSignInAt: DateTime.parse(json["last_sign_in_at"]),
     appMetadata: AppMetadata.fromJson(json["app_metadata"]),
     userMetadata: Data.fromJson(json["user_metadata"]),
@@ -98,6 +61,7 @@ class User {
     "email": email,
     "email_confirmed_at": emailConfirmedAt.toIso8601String(),
     "phone": phone,
+    "confirmed_at": confirmedAt.toIso8601String(),
     "last_sign_in_at": lastSignInAt.toIso8601String(),
     "app_metadata": appMetadata.toJson(),
     "user_metadata": userMetadata.toJson(),
