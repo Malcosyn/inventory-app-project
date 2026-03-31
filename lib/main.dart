@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_app_project/pages/login_page.dart';
 import 'package:inventory_app_project/pages/signup_page.dart';
 import 'package:inventory_app_project/secrets/supabase_secret.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,7 +21,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
-      home: SignupPage(),
+      home: LoginPage(),
     );
   }
 }

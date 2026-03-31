@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:inventory_app_project/models/user_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
@@ -18,12 +19,13 @@ class AuthService {
     return response;
   }
 
-  Future<String> signInWithEmailAndPassword(String email, String password) async {
+  Future<void> signInWithEmailAndPassword(String email, String password) async {
     final response = await client.auth.signInWithPassword(
       email: email,
       password: password,
     );
-
-    return response.session!.accessToken;
+    response;
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setString('token', response.session!.accessToken);
   }
 }
