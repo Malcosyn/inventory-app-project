@@ -10,6 +10,35 @@ class ProductService {
     await _client.from(_tableName).insert(product.toJson());
   }
 
+  Future<String> createProductEntry({
+    required int storeId,
+    required String name,
+    int? categoryId,
+    String? supplierId,
+    String? imageUrl,
+    String? barcode,
+  }) async {
+    final payload = <String, dynamic>{
+      'store_id': storeId,
+      'name': name,
+      'category_id': categoryId,
+      'supplier_id': supplierId,
+      'image_url': imageUrl,
+      'barcode': barcode,
+      'created_at': DateTime.now().toIso8601String(),
+    };
+
+    payload.removeWhere((key, value) => value == null);
+
+    final response = await _client
+        .from(_tableName)
+        .insert(payload)
+        .select('id')
+        .single();
+
+    return response['id'] as String;
+  }
+
   Future<void> updateProduct(ProductModel product) async {
     await _client
         .from(_tableName)
@@ -17,7 +46,7 @@ class ProductService {
         .eq('id', product.id);
   }
 
-  Future<void> deleteProduct(int id) async {
+  Future<void> deleteProduct(String id) async {
     await _client.from(_tableName).delete().eq('id', id);
   }
 

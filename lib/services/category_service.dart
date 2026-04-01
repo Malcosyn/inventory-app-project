@@ -5,6 +5,15 @@ class CategoryService {
   final _client = Supabase.instance.client;
   final String _tableName = 'categories';
 
+  Future<List<CategoryModel>> getCategoriesByIds(List<int> ids) async {
+    if (ids.isEmpty) {
+      return const [];
+    }
+
+    final response = await _client.from(_tableName).select().inFilter('id', ids);
+    return response.map((e) => CategoryModel.fromJson(e)).toList();
+  }
+
   Future<CategoryModel> getCategoryById(int id) async {
     final response = await _client
         .from(_tableName)
