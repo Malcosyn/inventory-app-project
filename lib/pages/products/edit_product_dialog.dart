@@ -1,0 +1,933 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:inventory_app_project/models/category_model.dart';
+import 'package:inventory_app_project/models/inventory_model.dart';
+import 'package:inventory_app_project/models/product_model.dart';
+import 'package:inventory_app_project/models/supplier_model.dart';
+import 'package:inventory_app_project/services/inventory_service.dart';
+import 'package:inventory_app_project/services/product_service.dart';
+import 'package:inventory_app_project/services/supplier_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class _C {
+  static const bg = Color(0xFFFCF9F5);
+  static const surface = Color(0xFFFFFFFF);
+  static const border = Color(0xFFD5C2AB);
+  static const inputBg = Color(0xFFF7F3EF);
+  static const ink = Color(0xFF1A1612);
+  static const inkMid = Color(0xFF4D4639);
+  static const inkLight = Color(0xFF85735E);
+  static const primary = Color(0xFFD9A05B);
+  static const success = Color(0xFF16A34A);
+  static const danger = Color(0xFFBA1A1A);
+}
+
+class EditProductDialog {
+  static Future<void> show(
+    BuildContext context, {
+    required ProductModel product,
+    required InventoryModel? inventory,
+    required ProductService productService,
+    required InventoryService inventoryService,
+    required Map<int, CategoryModel> categoriesById,
+    required Future<void> Function() onUpdated,
+  }) async {
+    final nameController = TextEditingController(text: product.name);
+    final barcodeController = TextEditingController(text: product.barcode ?? '');
+    final imageUrlController = TextEditingController(text: product.imageUrl ?? '');
+    final costController = TextEditingController(
+      text: inventory?.costPrice.toString() ?? '',
+    );
+    final sellingController = TextEditingController(
+      text: inventory?.sellingPrice.toString() ?? '',
+    );
+    final thresholdController = TextEditingController(
+      text: inventory?.lowStockThreshold.toString() ?? '',
+    );
+
+    int? selectedCategoryId = product.categoryId;
+    String? selectedSupplierId = product.supplierId;
+
+    final categories = categoriesById.values.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    List<SupplierModel> suppliers = const [];
+    try {
+      suppliers = await SupplierService().getSuppliersByStoreId(product.storeId);
+    } catch (e) {
+      debugPrint('Failed to fetch suppliers for edit form: $e');
+    }
+
+    if (!context.mounted) return;
+
+    final shouldSave = await showModalBottomSheet<bool>(
+          context: context,
+          useSafeArea: true,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => _EditProductSheet(
+            nameController: nameController,
+            barcodeController: barcodeController,
+          imageUrlController: imageUrlController,
+            costController: costController,
+            sellingController: sellingController,
+            thresholdController: thresholdController,
+            categories: categories,
+            suppliers: suppliers,
+            initialCategoryId: selectedCategoryId,
+            initialSupplierId: selectedSupplierId,
+            hasInventory: inventory != null,
+            onCategoryChanged: (v) => selectedCategoryId = v,
+            onSupplierChanged: (v) => selectedSupplierId = v,
+          ),
+        ) ??
+        false;
+
+    final updatedName = nameController.text.trim();
+    final updatedBarcode = barcodeController.text.trim();
+    final updatedImageUrl = imageUrlController.text.trim();
+    final parsedCost = int.tryParse(costController.text.trim());
+    final parsedSelling = int.tryParse(sellingController.text.trim());
+    final parsedThreshold = int.tryParse(thresholdController.text.trim());
+
+    nameController.dispose();
+    barcodeController.dispose();
+    imageUrlController.dispose();
+    costController.dispose();
+    sellingController.dispose();
+    thresholdController.dispose();
+
+    if (!context.mounted || !shouldSave) return;
+
+    if (updatedName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nama produk tidak boleh kosong.')),
+      );
+      return;
+    }
+
+    if (inventory != null) {
+      if (parsedCost == null || parsedCost < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Harga modal tidak valid.')),
+        );
+        return;
+      }
+      if (parsedSelling == null || parsedSelling < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Harga jual tidak valid.')),
+        );
+        return;
+      }
+      if (parsedThreshold == null || parsedThreshold < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Threshold tidak valid.')),
+        );
+        return;
+      }
+    }
+
+    final updatedProduct = ProductModel(
+      id: product.id,
+      storeId: product.storeId,
+      categoryId: selectedCategoryId,
+      supplierId: selectedSupplierId,
+      imageUrl: updatedImageUrl.isEmpty ? null : updatedImageUrl,
+      name: updatedName,
+      barcode: updatedBarcode.isEmpty ? null : updatedBarcode,
+      createdAt: product.createdAt,
+    );
+
+    try {
+      await productService.updateProduct(updatedProduct);
+
+      if (inventory != null) {
+        final updatedInventory = InventoryModel(
+          id: inventory.id,
+          productId: inventory.productId,
+          costPrice: parsedCost!,
+          sellingPrice: parsedSelling!,
+          stockQuantity: inventory.stockQuantity,
+          lowStockThreshold: parsedThreshold!,
+          updatedAt: DateTime.now(),
+          storeId: inventory.storeId,
+        );
+        await inventoryService.updateInventory(updatedInventory);
+      }
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Produk berhasil diperbarui.')),
+      );
+      await onUpdated();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal update produk: $e')),
+      );
+    }
+  }
+}
+
+class _EditProductSheet extends StatefulWidget {
+  final TextEditingController nameController;
+  final TextEditingController barcodeController;
+  final TextEditingController imageUrlController;
+  final TextEditingController costController;
+  final TextEditingController sellingController;
+  final TextEditingController thresholdController;
+  final List<CategoryModel> categories;
+  final List<SupplierModel> suppliers;
+  final int? initialCategoryId;
+  final String? initialSupplierId;
+  final bool hasInventory;
+  final ValueChanged<int?> onCategoryChanged;
+  final ValueChanged<String?> onSupplierChanged;
+
+  const _EditProductSheet({
+    required this.nameController,
+    required this.barcodeController,
+    required this.imageUrlController,
+    required this.costController,
+    required this.sellingController,
+    required this.thresholdController,
+    required this.categories,
+    required this.suppliers,
+    required this.initialCategoryId,
+    required this.initialSupplierId,
+    required this.hasInventory,
+    required this.onCategoryChanged,
+    required this.onSupplierChanged,
+  });
+
+  @override
+  State<_EditProductSheet> createState() => _EditProductSheetState();
+}
+
+class _EditProductSheetState extends State<_EditProductSheet> {
+  static const List<String> _storageBuckets = <String>[
+    'PRODUCT-IMAGES',
+    'product-images',
+    'PRODUCT_BUCK',
+    'product_buck',
+    'products',
+  ];
+
+  final ImagePicker _imagePicker = ImagePicker();
+
+  int? _categoryId;
+  String? _supplierId;
+  Uint8List? _selectedImageBytes;
+  bool _isUploadingImage = false;
+  bool _hasSelectedImage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _categoryId = widget.initialCategoryId;
+    _supplierId = widget.initialSupplierId;
+  }
+
+  Future<void> _chooseImageSource() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Pilih dari Galeri'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Ambil dari Kamera'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null || !mounted) return;
+    await _pickAndUploadImage(source);
+  }
+
+  Future<void> _pickAndUploadImage(ImageSource source) async {
+    try {
+      final file = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+
+      if (file == null || !mounted) return;
+
+      final bytes = await file.readAsBytes();
+      final ext = _resolveExtension(file.name);
+      final fileName =
+          'product_${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}.$ext';
+      final storagePath = 'uploads/$fileName';
+
+      setState(() {
+        _hasSelectedImage = true;
+        _selectedImageBytes = bytes;
+        _isUploadingImage = true;
+      });
+
+      widget.imageUrlController.clear();
+      final publicUrl = await _uploadWithFallback(
+        storagePath: storagePath,
+        bytes: bytes,
+        ext: ext,
+      );
+
+      if (!mounted) return;
+      widget.imageUrlController.text = publicUrl;
+      setState(() {
+        _isUploadingImage = false;
+      });
+      _showSnack('Foto berhasil diupload.', success: true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isUploadingImage = false;
+      });
+      final isLoggedIn = Supabase.instance.client.auth.currentUser != null;
+      _showSnack(
+        'Upload gambar gagal. Login: ${isLoggedIn ? 'ya' : 'tidak'}. Error: $e',
+      );
+    }
+  }
+
+  Future<String> _uploadWithFallback({
+    required String storagePath,
+    required Uint8List bytes,
+    required String ext,
+  }) async {
+    final errors = <String>[];
+
+    for (final bucket in _storageBuckets) {
+      try {
+        final storage = Supabase.instance.client.storage.from(bucket);
+        await storage.uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: FileOptions(
+            upsert: true,
+            contentType: _contentTypeFor(ext),
+          ),
+        );
+        return storage.getPublicUrl(storagePath);
+      } catch (e) {
+        errors.add('$bucket: $e');
+      }
+    }
+
+    throw Exception(
+      'Semua bucket upload gagal (${_storageBuckets.join(', ')}). ${errors.join(' | ')}',
+    );
+  }
+
+  String _resolveExtension(String name) {
+    final parts = name.split('.');
+    if (parts.length < 2) return 'jpg';
+    final ext = parts.last.toLowerCase();
+    if (ext == 'jpg' || ext == 'jpeg' || ext == 'png' || ext == 'webp') {
+      return ext;
+    }
+    return 'jpg';
+  }
+
+  String _contentTypeFor(String ext) {
+    switch (ext) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'jpg':
+      case 'jpeg':
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+  void _showSnack(String message, {bool success = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success ? _C.success : _C.danger,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final bottomInset = media.viewInsets.bottom;
+    final isDesktop = media.size.width >= 900;
+
+    return FractionallySizedBox(
+      heightFactor: isDesktop ? 0.93 : 0.97,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        child: Material(
+          color: _C.bg,
+          child: Column(
+            children: [
+              _TopBar(onClose: () => Navigator.of(context).pop(false)),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ImageHero(
+                            isUploading: _isUploadingImage,
+                            imageBytes: _selectedImageBytes,
+                            imageUrl: widget.imageUrlController.text.trim(),
+                            onTap: _chooseImageSource,
+                          ),
+                          const SizedBox(height: 20),
+                          _SectionLabel('Product Name'),
+                          const SizedBox(height: 8),
+                          _InputField(
+                            controller: widget.nameController,
+                            hint: 'e.g. Organic Honey Jar',
+                            icon: Icons.label_outline,
+                            required: true,
+                          ),
+                          const SizedBox(height: 14),
+                          _ResponsiveTwoColumns(
+                            left: _ColumnField(
+                              label: 'Category',
+                              child: _SelectField<int?>(
+                                hint: 'Select category',
+                                initialValue: _categoryId,
+                                items: [
+                                  const DropdownMenuItem<int?>(
+                                    value: null,
+                                    child: Text('Tanpa kategori'),
+                                  ),
+                                  ...widget.categories.map(
+                                    (c) => DropdownMenuItem<int?>(
+                                      value: c.id,
+                                      child: Text(c.name),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (v) {
+                                  setState(() => _categoryId = v);
+                                  widget.onCategoryChanged(v);
+                                },
+                              ),
+                            ),
+                            right: _ColumnField(
+                              label: 'Supplier',
+                              child: _SelectField<String?>(
+                                hint: 'Select supplier',
+                                initialValue: _supplierId,
+                                items: [
+                                  const DropdownMenuItem<String?>(
+                                    value: null,
+                                    child: Text('Tanpa supplier'),
+                                  ),
+                                  ...widget.suppliers.map(
+                                    (s) => DropdownMenuItem<String?>(
+                                      value: s.id,
+                                      child: Text(s.name),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (v) {
+                                  setState(() => _supplierId = v);
+                                  widget.onSupplierChanged(v);
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          _SectionLabel('Barcode'),
+                          const SizedBox(height: 8),
+                          _InputField(
+                            controller: widget.barcodeController,
+                            hint: 'Scan atau ketik manual',
+                            icon: Icons.qr_code_rounded,
+                          ),
+                          if (widget.hasInventory) ...[
+                            const SizedBox(height: 14),
+                            _ResponsiveTwoColumns(
+                              left: _ColumnField(
+                                label: 'Harga Modal',
+                                child: _InputField(
+                                  controller: widget.costController,
+                                  hint: '0',
+                                  icon: Icons.shopping_bag_outlined,
+                                  required: true,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  prefixText: 'Rp ',
+                                ),
+                              ),
+                              right: _ColumnField(
+                                label: 'Harga Jual',
+                                child: _InputField(
+                                  controller: widget.sellingController,
+                                  hint: '0',
+                                  icon: Icons.sell_outlined,
+                                  required: true,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  prefixText: 'Rp ',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            _SectionLabel('Batas Stok Rendah'),
+                            const SizedBox(height: 8),
+                            _InputField(
+                              controller: widget.thresholdController,
+                              hint: '5',
+                              icon: Icons.warning_amber_outlined,
+                              required: true,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              suffixText: 'unit',
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              _BottomActions(
+                isUploadingImage: _isUploadingImage,
+                canSaveAfterImagePick:
+                    !_hasSelectedImage || widget.imageUrlController.text.trim().isNotEmpty,
+                onCancel: () => Navigator.of(context).pop(false),
+                onSave: () => Navigator.of(context).pop(true),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const _TopBar({required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _C.bg,
+      elevation: 1,
+      shadowColor: Colors.black12,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: onClose,
+              icon: const Icon(Icons.arrow_back_rounded),
+              color: _C.inkMid,
+              tooltip: 'Kembali',
+            ),
+            const Text(
+              'Edit Product',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: _C.ink,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const Spacer(),
+            const Icon(
+              Icons.edit_rounded,
+              color: _C.primary,
+              size: 24,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 11,
+        letterSpacing: 1.2,
+        color: _C.inkMid,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _ColumnField extends StatelessWidget {
+  final String label;
+  final Widget child;
+
+  const _ColumnField({required this.label, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionLabel(label),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+}
+
+class _ResponsiveTwoColumns extends StatelessWidget {
+  final Widget left;
+  final Widget right;
+
+  const _ResponsiveTwoColumns({required this.left, required this.right});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 700) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: left),
+              const SizedBox(width: 14),
+              Expanded(child: right),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            left,
+            const SizedBox(height: 14),
+            right,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _InputField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final bool required;
+  final TextInputType keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final String? prefixText;
+  final String? suffixText;
+
+  const _InputField({
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.required = false,
+    this.keyboardType = TextInputType.text,
+    this.inputFormatters,
+    this.prefixText,
+    this.suffixText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: _C.ink,
+      ),
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: _C.inputBg,
+        hintText: required ? '$hint *' : hint,
+        hintStyle: const TextStyle(
+          color: _C.inkLight,
+          fontWeight: FontWeight.w500,
+        ),
+        prefixIcon: Icon(icon, size: 20, color: _C.inkLight),
+        prefixText: prefixText,
+        prefixStyle: const TextStyle(
+          color: _C.inkMid,
+          fontWeight: FontWeight.w700,
+        ),
+        suffixText: suffixText,
+        suffixStyle: const TextStyle(
+          color: _C.inkLight,
+          fontWeight: FontWeight.w600,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0x20000000)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _C.primary, width: 1.6),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectField<T> extends StatelessWidget {
+  final String hint;
+  final T? initialValue;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+
+  const _SelectField({
+    required this.hint,
+    required this.initialValue,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<T>(
+      initialValue: initialValue,
+      items: items,
+      onChanged: onChanged,
+      icon: const Icon(Icons.expand_more_rounded, color: _C.inkLight),
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: _C.ink,
+      ),
+      dropdownColor: _C.surface,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: _C.inputBg,
+        hintText: hint,
+        hintStyle: const TextStyle(
+          color: _C.inkLight,
+          fontWeight: FontWeight.w500,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0x20000000)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _C.primary, width: 1.6),
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageHero extends StatelessWidget {
+  final bool isUploading;
+  final Uint8List? imageBytes;
+  final String? imageUrl;
+  final VoidCallback onTap;
+
+  const _ImageHero({
+    required this.isUploading,
+    required this.imageBytes,
+    required this.imageUrl,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: isUploading ? null : onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 220,
+        decoration: BoxDecoration(
+          color: _C.inputBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _C.border),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (imageBytes != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Image.memory(imageBytes!, fit: BoxFit.cover),
+              )
+            else if (imageUrl != null && imageUrl!.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Image.network(
+                  imageUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox.shrink(),
+                ),
+              ),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(
+                  alpha: imageBytes != null || (imageUrl != null && imageUrl!.isNotEmpty)
+                      ? 0.28
+                      : 0,
+                ),
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: _C.surface,
+                    borderRadius: BorderRadius.circular(99),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: isUploading
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                        )
+                      : const Icon(Icons.add_a_photo_outlined, color: _C.primary),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isUploading ? 'Uploading photo...' : 'Update Product Photo',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: _C.inkMid,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'PNG, JPG up to 10MB',
+                  style: TextStyle(fontSize: 12, color: _C.inkLight),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomActions extends StatelessWidget {
+  final bool isUploadingImage;
+  final bool canSaveAfterImagePick;
+  final VoidCallback onCancel;
+  final VoidCallback onSave;
+
+  const _BottomActions({
+    required this.isUploadingImage,
+    required this.canSaveAfterImagePick,
+    required this.onCancel,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: const BoxDecoration(
+        color: _C.surface,
+        border: Border(top: BorderSide(color: Color(0x14000000))),
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: (isUploadingImage || !canSaveAfterImagePick) ? null : onSave,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _C.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  icon: Icon(
+                    isUploadingImage
+                        ? Icons.cloud_upload_outlined
+                        : Icons.save_outlined,
+                    size: 20,
+                  ),
+                  label: Text(
+                    isUploadingImage
+                        ? 'Uploading Image...'
+                        : (canSaveAfterImagePick ? 'Simpan Perubahan' : 'Upload gambar dulu'),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 50,
+                child: OutlinedButton(
+                  onPressed: onCancel,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _C.inkMid,
+                    side: const BorderSide(color: _C.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Batal',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

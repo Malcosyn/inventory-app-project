@@ -6,6 +6,8 @@ import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/order_page.dart';
+import 'package:inventory_app_project/pages/products/add_product_dialog.dart';
+import 'package:inventory_app_project/pages/products/edit_product_dialog.dart';
 import 'package:inventory_app_project/pages/products/product_detail.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
@@ -42,12 +44,10 @@ class _InventoryPageState extends State<InventoryPage> {
   String _searchQuery = '';
   String _selectedFilter = 'All Categories';
 
-  static const List<String> _filters = <String>[
-    'All Categories',
-    'Low Stock',
-    'Out of Stock',
-    'In Stock',
-  ];
+  List<String> get _filters {
+    final names = _categoriesById.values.map((c) => c.name).toList()..sort();
+    return <String>['All Categories', ...names];
+  }
 
   @override
   void initState() {
@@ -88,7 +88,6 @@ class _InventoryPageState extends State<InventoryPage> {
       try {
         categories = await _categoryService.getCategoriesByIds(categoryIds);
       } catch (e) {
-        // Category is optional for list rendering; do not fail inventory page.
         debugPrint('Failed to fetch categories: $e');
       }
       final inventoryByProductId = <String, InventoryModel>{
@@ -108,11 +107,14 @@ class _InventoryPageState extends State<InventoryPage> {
       setState(() {
         _items = items;
         _categoriesById = categoriesById;
+        if (_selectedFilter != 'All Categories' &&
+            !_filters.contains(_selectedFilter)) {
+          _selectedFilter = 'All Categories';
+        }
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
-
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -122,12 +124,10 @@ class _InventoryPageState extends State<InventoryPage> {
 
   String _resolveCategoryName(ProductModel product) {
     final categoryId = product.categoryId;
-    if (categoryId == null) {
-      return 'Uncategorized';
-    }
-
+    if (categoryId == null) return 'Uncategorized';
     return _categoriesById[categoryId]?.name ?? 'Category $categoryId';
   }
+
   Future<void> _deleteProduct(_InventoryItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -153,7 +153,6 @@ class _InventoryPageState extends State<InventoryPage> {
     if (confirmed != true) return;
 
     try {
-      // Delete inventory row first to avoid FK violations, then product.
       if (item.inventory != null) {
         await _inventoryService.deleteInventory(item.inventory!.id);
       }
@@ -173,277 +172,118 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Future<void> _addItemToWarehouse() async {
+    await AddProductDialog.show(
+      context,
+      categoriesById: _categoriesById,
+      onProductAdded: _loadInventory,
+    );
+  }
+
+  Future<void> _addCategoryQuick() async {
     final nameController = TextEditingController();
-    final barcodeController = TextEditingController();
-    final imageUrlController = TextEditingController();
-    final costPriceController = TextEditingController();
-    final sellingPriceController = TextEditingController();
-    final stockController = TextEditingController(text: '0');
-    final thresholdController = TextEditingController(text: '5');
-
-    int? selectedCategoryId;
-    String? selectedSupplierId;
-
-    final categories = _categoriesById.values.toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
-
-    List<SupplierModel> suppliers = const [];
-    try {
-      suppliers = await _supplierService.getSuppliersByStoreId(_defaultStoreId);
-    } catch (e) {
-      debugPrint('Failed to fetch suppliers for create form: $e');
-    }
-
-    if (!mounted) return;
-
-    final shouldCreate = await showDialog<bool>(
+    final created = await showDialog<bool>(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Tambah Item Gudang'),
-              content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 360,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nama Produk *',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: barcodeController,
-                        decoration: const InputDecoration(
-                          labelText: 'Barcode (opsional)',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: imageUrlController,
-                        decoration: const InputDecoration(
-                          labelText: 'Image URL (opsional)',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<int?>(
-                        initialValue: selectedCategoryId,
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('Tanpa kategori'),
-                          ),
-                          ...categories.map(
-                            (category) => DropdownMenuItem<int?>(
-                              value: category.id,
-                              child: Text(category.name),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setDialogState(() => selectedCategoryId = value);
-                        },
-                        decoration: const InputDecoration(
-                          labelText: 'Kategori',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String?>(
-                        initialValue: selectedSupplierId,
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('Tanpa supplier'),
-                          ),
-                          ...suppliers.map(
-                            (supplier) => DropdownMenuItem<String?>(
-                              value: supplier.id,
-                              child: Text(supplier.name),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setDialogState(() => selectedSupplierId = value);
-                        },
-                        decoration: const InputDecoration(
-                          labelText: 'Supplier',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: costPriceController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Harga Modal *',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: sellingPriceController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Harga Jual *',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: stockController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Stock Awal *',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: thresholdController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Low Stock Threshold *',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Batal'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Tambah'),
-                ),
-              ],
-            );
-          },
+        return AlertDialog(
+          title: const Text('Add Category'),
+          content: TextField(
+            controller: nameController,
+            decoration: const InputDecoration(
+              labelText: 'Category name',
+              hintText: 'Contoh: Minuman',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Simpan'),
+            ),
+          ],
         );
       },
     );
 
     final name = nameController.text.trim();
-    final barcode = barcodeController.text.trim();
-    final imageUrl = imageUrlController.text.trim();
-    final costPrice = int.tryParse(costPriceController.text.trim());
-    final sellingPrice = int.tryParse(sellingPriceController.text.trim());
-    final initialStock = int.tryParse(stockController.text.trim());
-    final threshold = int.tryParse(thresholdController.text.trim());
-
     nameController.dispose();
-    barcodeController.dispose();
-    imageUrlController.dispose();
-    costPriceController.dispose();
-    sellingPriceController.dispose();
-    stockController.dispose();
-    thresholdController.dispose();
-
-    if (!mounted || shouldCreate != true) return;
-
+    if (!mounted || created != true) return;
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama produk wajib diisi.')),
-      );
-      return;
-    }
-
-    if (costPrice == null ||
-        sellingPrice == null ||
-        initialStock == null ||
-        threshold == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Field angka wajib diisi dengan benar.')),
-      );
-      return;
-    }
-
-    if (costPrice < 0 || sellingPrice < 0 || initialStock < 0 || threshold < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nilai angka tidak boleh negatif.')),
+        const SnackBar(content: Text('Nama category wajib diisi.')),
       );
       return;
     }
 
     try {
-      final productId = await _productService.createProductEntry(
+      final existing = await _categoryService.getCategoriesByStoreId(_defaultStoreId);
+      final maxId = existing.isEmpty
+          ? 0
+          : existing.map((c) => c.id).reduce((a, b) => a > b ? a : b);
+      final category = CategoryModel(
+        id: maxId + 1,
         storeId: _defaultStoreId,
         name: name,
-        categoryId: selectedCategoryId,
-        supplierId: selectedSupplierId,
-        imageUrl: imageUrl.isEmpty ? null : imageUrl,
-        barcode: barcode.isEmpty ? null : barcode,
       );
-
-      await _inventoryService.createInventoryEntry(
-        productId: productId,
-        costPrice: costPrice,
-        sellingPrice: sellingPrice,
-        stockQuantity: initialStock,
-        lowStockThreshold: threshold,
-        storeId: _defaultStoreId,
-      );
-
-      if (initialStock > 0) {
-        await _stockMovementService.createStockMovementEntry(
-          productId: productId,
-          type: 'IN',
-          quantity: initialStock,
-          stockAfter: initialStock,
-          note: 'Initial stock saat tambah item',
-          storeId: _defaultStoreId,
-        );
-      }
+      await _categoryService.createCategory(category);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Item berhasil ditambahkan ke gudang.')),
+        const SnackBar(content: Text('Category berhasil ditambahkan.')),
       );
       await _loadInventory();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menambah item: $e')),
+        SnackBar(content: Text('Gagal tambah category: $e')),
       );
     }
   }
 
-  Future<void> _editProduct(_InventoryItem item) async {
-    final nameController = TextEditingController(text: item.product.name);
-    final sellingController = TextEditingController(
-      text: item.inventory?.sellingPrice.toString() ?? '',
-    );
-    final thresholdController = TextEditingController(
-      text: item.inventory?.lowStockThreshold.toString() ?? '',
-    );
+  Future<void> _addSupplierQuick() async {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final addressController = TextEditingController();
+    final emailController = TextEditingController();
 
-    final shouldSave = await showDialog<bool>(
+    final created = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Edit Product'),
+          title: const Text('Add Supplier'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Product Name'),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: sellingController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Selling Price'),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: thresholdController,
-                  keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Low Stock Threshold',
+                    labelText: 'Supplier name',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: addressController,
+                  decoration: const InputDecoration(
+                    labelText: 'Address',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email (optional)',
                   ),
                 ),
               ],
@@ -463,79 +303,175 @@ class _InventoryPageState extends State<InventoryPage> {
       },
     );
 
-    final updatedName = nameController.text.trim();
-    final parsedSelling = int.tryParse(sellingController.text.trim());
-    final parsedThreshold = int.tryParse(thresholdController.text.trim());
+    final name = nameController.text.trim();
+    final phone = phoneController.text.trim();
+    final address = addressController.text.trim();
+    final email = emailController.text.trim();
 
     nameController.dispose();
-    sellingController.dispose();
-    thresholdController.dispose();
+    phoneController.dispose();
+    addressController.dispose();
+    emailController.dispose();
 
-    if (!mounted || shouldSave != true) return;
+    if (!mounted || created != true) return;
 
-    if (updatedName.isEmpty) {
+    if (name.isEmpty || phone.isEmpty || address.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama produk tidak boleh kosong.')),
+        const SnackBar(content: Text('Nama, phone, dan address wajib diisi.')),
       );
       return;
     }
 
-    if (item.inventory != null) {
-      if (parsedSelling == null || parsedSelling < 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Harga jual tidak valid.')),
-        );
-        return;
-      }
-
-      if (parsedThreshold == null || parsedThreshold < 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Threshold tidak valid.')),
-        );
-        return;
-      }
-    }
-
-    final updatedProduct = ProductModel(
-      id: item.product.id,
-      storeId: item.product.storeId,
-      categoryId: item.product.categoryId,
-      supplierId: item.product.supplierId,
-      imageUrl: item.product.imageUrl,
-      name: updatedName,
-      barcode: item.product.barcode,
-      createdAt: item.product.createdAt,
-    );
-
     try {
-      await _productService.updateProduct(updatedProduct);
-
-      if (item.inventory != null) {
-        final inv = item.inventory!;
-        final updatedInventory = InventoryModel(
-          id: inv.id,
-          productId: inv.productId,
-          costPrice: inv.costPrice,
-          sellingPrice: parsedSelling!,
-          stockQuantity: inv.stockQuantity,
-          lowStockThreshold: parsedThreshold!,
-          updatedAt: DateTime.now(),
-          storeId: inv.storeId,
-        );
-        await _inventoryService.updateInventory(updatedInventory);
-      }
+      final supplier = SupplierModel(
+        id: 'sup_${DateTime.now().microsecondsSinceEpoch}',
+        name: name,
+        phone: phone,
+        address: address,
+        email: email.isEmpty ? null : email,
+        storeId: _defaultStoreId,
+      );
+      await _supplierService.createSupplier(supplier);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Produk berhasil diperbarui.')),
+        const SnackBar(content: Text('Supplier berhasil ditambahkan.')),
       );
-      await _loadInventory();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal update produk: $e')),
+        SnackBar(content: Text('Gagal tambah supplier: $e')),
       );
     }
+  }
+
+  Future<void> _pickProductForStockChange({required bool isStockIn}) async {
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Belum ada produk di inventory.')),
+      );
+      return;
+    }
+
+    final picked = await showModalBottomSheet<_InventoryItem>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: Row(
+                children: [
+                  Text(
+                    isStockIn ? 'Pilih Produk untuk Stock In' : 'Pilih Produk untuk Stock Out',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.separated(
+                itemCount: _items.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final item = _items[index];
+                  return ListTile(
+                    title: Text(item.product.name),
+                    subtitle: Text('${_resolveCategoryName(item.product)} • ${item.stockQuantity} unit'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).pop(item),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || picked == null) return;
+    await _changeStock(item: picked, isStockIn: isStockIn);
+  }
+
+  Future<void> _showQuickActions() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: const Text('Add Item'),
+              onTap: () => Navigator.of(context).pop('add_item'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.local_shipping_outlined),
+              title: const Text('Add Supplier'),
+              onTap: () => Navigator.of(context).pop('add_supplier'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.category_outlined),
+              title: const Text('Add Category'),
+              onTap: () => Navigator.of(context).pop('add_category'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: const Text('Add Order'),
+              onTap: () => Navigator.of(context).pop('add_order'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.arrow_downward_rounded),
+              title: const Text('Stock In'),
+              onTap: () => Navigator.of(context).pop('stock_in'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.arrow_upward_rounded),
+              title: const Text('Stock Out'),
+              onTap: () => Navigator.of(context).pop('stock_out'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || action == null) return;
+
+    switch (action) {
+      case 'add_item':
+        await _addItemToWarehouse();
+      case 'add_supplier':
+        await _addSupplierQuick();
+      case 'add_category':
+        await _addCategoryQuick();
+      case 'add_order':
+        if (!mounted) return;
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrderPage()));
+      case 'stock_in':
+        await _pickProductForStockChange(isStockIn: true);
+      case 'stock_out':
+        await _pickProductForStockChange(isStockIn: false);
+      default:
+        break;
+    }
+  }
+
+  Future<void> _editProduct(_InventoryItem item) async {
+    await EditProductDialog.show(
+      context,
+      product: item.product,
+      inventory: item.inventory,
+      productService: _productService,
+      inventoryService: _inventoryService,
+      categoriesById: _categoriesById,
+      onUpdated: _loadInventory,
+    );
   }
 
   Future<void> _changeStock({
@@ -589,9 +525,7 @@ class _InventoryPageState extends State<InventoryPage> {
             FilledButton(
               onPressed: () {
                 final parsed = int.tryParse(qtyController.text.trim());
-                if (parsed == null || parsed <= 0) {
-                  return;
-                }
+                if (parsed == null || parsed <= 0) return;
                 Navigator.of(context).pop(
                   _StockChangeInput(
                     quantity: parsed,
@@ -657,8 +591,6 @@ class _InventoryPageState extends State<InventoryPage> {
         ),
       );
       await _loadInventory();
-      
-      // Pop back to InventoryPage to show updated data
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
@@ -675,7 +607,6 @@ class _InventoryPageState extends State<InventoryPage> {
       dynamic category;
       List<StockMovementModel> recentMovements = [];
 
-      // Fetch supplier if ID exists
       if (item.product.supplierId != null) {
         try {
           supplier = await _supplierService.getSupplierById(item.product.supplierId!);
@@ -684,12 +615,9 @@ class _InventoryPageState extends State<InventoryPage> {
         }
       }
 
-      // Fetch category if ID exists
       if (item.product.categoryId != null) {
         final categoryId = item.product.categoryId!;
         category = _categoriesById[categoryId];
-
-        // Fallback: query single category if it is not present in cache.
         if (category == null) {
           try {
             category = await _categoryService.getCategoryById(categoryId);
@@ -699,16 +627,15 @@ class _InventoryPageState extends State<InventoryPage> {
         }
       }
 
-      // Fetch recent movements
       try {
-        recentMovements = await _stockMovementService.getStockMovementsByProductId(item.product.id);
+        recentMovements = await _stockMovementService
+            .getStockMovementsByProductId(item.product.id);
       } catch (e) {
         debugPrint('Failed to fetch movements: $e');
       }
 
       if (!mounted) return;
 
-      // Navigate with complete data
       final resolvedCategoryName = _resolveCategoryName(item.product);
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -751,70 +678,44 @@ class _InventoryPageState extends State<InventoryPage> {
       default:
         return;
     }
-
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => page));
   }
 
   List<_InventoryItem> get _visibleItems {
     final query = _searchQuery.trim().toLowerCase();
-
     return _items.where((item) {
       final nameMatches = query.isEmpty ||
           item.product.name.toLowerCase().contains(query) ||
           (item.product.barcode?.toLowerCase().contains(query) ?? false);
+      if (!nameMatches) return false;
 
-      if (!nameMatches) {
-        return false;
+      if (_selectedFilter == 'All Categories') {
+        return true;
       }
 
-      switch (_selectedFilter) {
-        case 'Low Stock':
-          return item.stockStatus == _StockStatus.low;
-        case 'Out of Stock':
-          return item.stockStatus == _StockStatus.out;
-        case 'In Stock':
-          return item.stockStatus == _StockStatus.inStock;
-        default:
-          return true;
-      }
+      return _resolveCategoryName(item.product) == _selectedFilter;
     }).toList();
   }
 
-  Color _statusBg(_StockStatus status) {
-    switch (status) {
-      case _StockStatus.inStock:
-        return const Color(0xFFFFF7ED);
-      case _StockStatus.low:
-        return const Color(0xFFFFEDD5);
-      case _StockStatus.out:
-        return const Color(0xFFFEE2E2);
-    }
-  }
+  Color _statusBg(_StockStatus status) => switch (status) {
+    _StockStatus.inStock => const Color(0xFFFFF7ED),
+    _StockStatus.low     => const Color(0xFFFFEDD5),
+    _StockStatus.out     => const Color(0xFFFEE2E2),
+  };
 
-  Color _statusText(_StockStatus status) {
-    switch (status) {
-      case _StockStatus.inStock:
-        return const Color(0xFFB45309);
-      case _StockStatus.low:
-        return const Color(0xFFEA580C);
-      case _StockStatus.out:
-        return const Color(0xFFDC2626);
-    }
-  }
+  Color _statusText(_StockStatus status) => switch (status) {
+    _StockStatus.inStock => const Color(0xFFB45309),
+    _StockStatus.low     => const Color(0xFFEA580C),
+    _StockStatus.out     => const Color(0xFFDC2626),
+  };
 
-  String _statusLabel(_StockStatus status) {
-    switch (status) {
-      case _StockStatus.inStock:
-        return 'In Stock';
-      case _StockStatus.low:
-        return 'Low Stock';
-      case _StockStatus.out:
-        return 'Out of Stock';
-    }
-  }
+  String _statusLabel(_StockStatus status) => switch (status) {
+    _StockStatus.inStock => 'In Stock',
+    _StockStatus.low     => 'Low Stock',
+    _StockStatus.out     => 'Out of Stock',
+  };
 
+  // ── Header (tanpa tombol tambah) ─────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       color: const Color(0xFFFDFAF6),
@@ -855,13 +756,17 @@ class _InventoryPageState extends State<InventoryPage> {
                     ),
                     Text(
                       'Main Warehouse',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textMedium,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AppColors.textMedium),
                     ),
                   ],
                 ),
+              ),
+              // Refresh button
+              IconButton(
+                onPressed: _loadInventory,
+                icon: const Icon(Icons.refresh_rounded),
+                tooltip: 'Reload',
+                color: AppColors.textMedium,
               ),
               Container(
                 width: 38,
@@ -878,6 +783,7 @@ class _InventoryPageState extends State<InventoryPage> {
             ],
           ),
           const SizedBox(height: 14),
+          // Search
           TextField(
             controller: _searchController,
             onChanged: (value) => setState(() => _searchQuery = value),
@@ -894,57 +800,37 @@ class _InventoryPageState extends State<InventoryPage> {
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _filters.map((filter) {
-                      final selected = filter == _selectedFilter;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(filter),
-                          selected: selected,
-                          onSelected: (_) {
-                            setState(() => _selectedFilter = filter);
-                          },
-                          selectedColor: AppColors.primary.withValues(alpha: 0.25),
-                          backgroundColor: Colors.white,
-                          labelStyle: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: selected
-                                ? const Color(0xFF92400E)
-                                : AppColors.textMedium,
-                          ),
-                          side: BorderSide(
-                            color: selected
-                                ? const Color(0xFFF59E0B)
-                                : AppColors.borderColor,
-                          ),
-                        ),
-                      );
-                    }).toList(),
+          // Filter chips
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: _filters.map((filter) {
+                final selected = filter == _selectedFilter;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(filter),
+                    selected: selected,
+                    onSelected: (_) => setState(() => _selectedFilter = filter),
+                    selectedColor: AppColors.primary.withValues(alpha: 0.25),
+                    backgroundColor: Colors.white,
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: selected
+                          ? const Color(0xFF92400E)
+                          : AppColors.textMedium,
+                    ),
+                    side: BorderSide(
+                      color: selected
+                          ? const Color(0xFFF59E0B)
+                          : AppColors.borderColor,
+                    ),
                   ),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: _addItemToWarehouse,
-                icon: const Icon(Icons.add_box_outlined, size: 18),
-                label: const Text('Tambah Item'),
-                style: OutlinedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-              const SizedBox(width: 6),
-              IconButton(
-                onPressed: _loadInventory,
-                icon: const Icon(Icons.refresh_rounded),
-                tooltip: 'Reload',
-              ),
-            ],
+                );
+              }).toList(),
+            ),
           ),
         ],
       ),
@@ -1013,9 +899,9 @@ class _InventoryPageState extends State<InventoryPage> {
         final item = visibleItems[index - 1];
         final status = item.stockStatus;
         final imageUrl = _imageUrlUseCase.resolveImageUrl(item.product.imageUrl);
-        final proxyUrl = (imageUrl != null) 
-			? _imageUrlUseCase.proxyImageUrl(imageUrl)
-			: null;
+        final proxyUrl = imageUrl != null
+            ? _imageUrlUseCase.proxyImageUrl(imageUrl)
+            : null;
 
         return InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -1075,9 +961,7 @@ class _InventoryPageState extends State<InventoryPage> {
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: _statusBg(status),
                               borderRadius: BorderRadius.circular(999),
@@ -1097,9 +981,7 @@ class _InventoryPageState extends State<InventoryPage> {
                       Text(
                         '${_resolveCategoryName(item.product)} • ${item.stockQuantity} units',
                         style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMedium,
-                        ),
+                            fontSize: 12, color: AppColors.textMedium),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -1113,11 +995,53 @@ class _InventoryPageState extends State<InventoryPage> {
                             ),
                           ),
                           const Spacer(),
-                          IconButton(
-                            onPressed: () {},
+                          PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                _editProduct(item);
+                              } else if (value == 'stock_in') {
+                                _changeStock(item: item, isStockIn: true);
+                              } else if (value == 'stock_out') {
+                                _changeStock(item: item, isStockIn: false);
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem<String>(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Edit'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem<String>(
+                                value: 'stock_in',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.arrow_downward_rounded, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Stock In'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem<String>(
+                                value: 'stock_out',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.arrow_upward_rounded, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Stock Out'),
+                                  ],
+                                ),
+                              ),
+                            ],
                             icon: const Icon(Icons.more_horiz_rounded),
-                            visualDensity: VisualDensity.compact,
-                            color: AppColors.textMedium,
+                            color: Colors.white,
+                            surfaceTintColor: Colors.white,
+                            iconColor: AppColors.textMedium,
+                            tooltip: 'Opsi produk',
                           ),
                         ],
                       ),
@@ -1134,6 +1058,10 @@ class _InventoryPageState extends State<InventoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    // FAB bottom offset: di atas bottom nav bar (asumsi nav bar ~72dp)
+    const double navBarHeight = 72;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: Stack(
@@ -1144,6 +1072,8 @@ class _InventoryPageState extends State<InventoryPage> {
               Expanded(child: _buildBody()),
             ],
           ),
+
+          // ── Bottom Navigation ─────────────────────────────────────────
           Positioned(
             bottom: 0,
             left: 0,
@@ -1153,38 +1083,48 @@ class _InventoryPageState extends State<InventoryPage> {
               onNavChanged: (index) => _onBottomNavChanged(context, index),
             ),
           ),
+
+          // ── FAB: Quick Actions (+) ───────────────────────────────────
+          Positioned(
+            right: 16,
+            bottom: navBarHeight + bottomPadding + 12,
+            child: FloatingActionButton(
+              onPressed: _showQuickActions,
+              backgroundColor: const Color(0xFFC87F2E),
+              foregroundColor: Colors.white,
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.add_rounded, size: 26),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
+// ── Supporting types (unchanged) ─────────────────────────────────────────────
+
 class _StockChangeInput {
   final int quantity;
   final String reason;
-
   const _StockChangeInput({required this.quantity, required this.reason});
 }
 
 class _InventoryItem {
   final ProductModel product;
   final InventoryModel? inventory;
-
   const _InventoryItem({required this.product, required this.inventory});
 
   int get stockQuantity => inventory?.stockQuantity ?? 0;
-  int get sellingPrice => inventory?.sellingPrice ?? 0;
+  int get sellingPrice  => inventory?.sellingPrice ?? 0;
 
   _StockStatus get stockStatus {
-    if (stockQuantity <= 0) {
-      return _StockStatus.out;
-    }
-
+    if (stockQuantity <= 0) return _StockStatus.out;
     final threshold = inventory?.lowStockThreshold ?? 5;
-    if (stockQuantity <= threshold) {
-      return _StockStatus.low;
-    }
-
+    if (stockQuantity <= threshold) return _StockStatus.low;
     return _StockStatus.inStock;
   }
 }
@@ -1222,10 +1162,7 @@ class _InventoryProductImageState extends State<_InventoryProductImage> {
       _activeUrl,
       fit: BoxFit.cover,
       loadingBuilder: (context, child, progress) {
-        if (progress == null) {
-          return child;
-        }
-
+        if (progress == null) return child;
         return const Center(
           child: SizedBox(
             width: 18,
@@ -1234,7 +1171,7 @@ class _InventoryProductImageState extends State<_InventoryProductImage> {
           ),
         );
       },
-      errorBuilder: (_, error, stackTrace) {
+      errorBuilder: (_, error, __) {
         if (!_usingFallback && widget.fallbackUrl != null) {
           debugPrint(
             'Image load failed for ${widget.productName}: ${widget.primaryUrl} | $error. Trying proxy ${widget.fallbackUrl}',
@@ -1248,7 +1185,6 @@ class _InventoryProductImageState extends State<_InventoryProductImage> {
           });
           return const SizedBox.shrink();
         }
-
         debugPrint(
           'Image load failed for ${widget.productName}: $_activeUrl | $error',
         );
