@@ -5,6 +5,28 @@ class InventoryService {
   final _client = Supabase.instance.client;
   final String _tableName = 'inventories';
 
+  Future<List<InventoryModel>> getInventoriesByStoreId(int storeId) async {
+    final productResponse = await _client
+        .from('products')
+        .select('id')
+        .eq('store_id', storeId);
+
+    final productIds = productResponse
+        .map((product) => product['id'] as String)
+        .toList();
+
+    if (productIds.isEmpty) {
+      return [];
+    }
+
+    final inventoryResponse = await _client
+        .from(_tableName)
+        .select()
+        .inFilter('product_id', productIds);
+
+    return inventoryResponse.map((e) => InventoryModel.fromJson(e)).toList();
+  }
+
   Future<void> createInventory(InventoryModel inventory) async {
     await _client.from(_tableName).insert(inventory.toJson());
   }
