@@ -31,6 +31,25 @@ class InventoryService {
     await _client.from(_tableName).insert(inventory.toJson());
   }
 
+  Future<void> createInventoryEntry({
+    required String productId,
+    required int costPrice,
+    required int sellingPrice,
+    required int stockQuantity,
+    required int lowStockThreshold,
+    required int storeId,
+  }) async {
+    await _client.from(_tableName).insert({
+      'product_id': productId,
+      'cost_price': costPrice,
+      'selling_price': sellingPrice,
+      'stock_quantity': stockQuantity,
+      'low_stock_threshold': lowStockThreshold,
+      'updated_at': DateTime.now().toIso8601String(),
+      'store_id': storeId,
+    });
+  }
+
   Future<void> updateInventory(InventoryModel inventory) async {
     await _client
         .from(_tableName)

@@ -9,6 +9,7 @@ class SupplierModel {
   String name;
   String phone;
   String address;
+  String? email;
   int storeId;
 
   SupplierModel({
@@ -16,6 +17,7 @@ class SupplierModel {
     required this.name,
     required this.phone,
     required this.address,
+    this.email,
     required this.storeId,
   });
 
@@ -24,6 +26,7 @@ class SupplierModel {
     name: json["name"],
     phone: json["phone"],
     address: json["address"],
+    email: json["email"],
     storeId: json["store_id"],
   );
 
@@ -32,6 +35,7 @@ class SupplierModel {
     "name": name,
     "phone": phone,
     "address": address,
+    "email": email,
     "store_id": storeId,
   };
 }

@@ -6,6 +6,25 @@ class StockMovementService {
   final _client = Supabase.instance.client;
   final String _tableName = 'stock_movement';
 
+  Future<void> createStockMovementEntry({
+    required String productId,
+    required String type,
+    required int quantity,
+    required int stockAfter,
+    required String note,
+    required int storeId,
+  }) async {
+    await _client.from(_tableName).insert({
+      'product_id': productId,
+      'type': type,
+      'quantity': quantity,
+      'stock_after': stockAfter,
+      'note': note,
+      'created_at': DateTime.now().toIso8601String(),
+      'store_id': storeId,
+    });
+  }
+
   Future<void> createStockMovement(StockMovementModel stockMovement) async {
     await _client.from(_tableName).insert(stockMovement.toJson());
   }

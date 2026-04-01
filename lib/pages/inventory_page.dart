@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_app_project/models/category_model.dart';
 import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
+import 'package:inventory_app_project/models/stock_movement_model.dart';
+import 'package:inventory_app_project/models/supplier_model.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/order_page.dart';
 import 'package:inventory_app_project/pages/products/product_detail.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
+import 'package:inventory_app_project/services/category_service.dart';
 import 'package:inventory_app_project/services/inventory_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
+import 'package:inventory_app_project/services/stock_movement_service.dart';
+import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/usecases/products/product_image_url_usecase.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
 
@@ -23,12 +29,16 @@ class _InventoryPageState extends State<InventoryPage> {
 
   final ProductService _productService = ProductService();
   final InventoryService _inventoryService = InventoryService();
+  final StockMovementService _stockMovementService = StockMovementService();
+  final CategoryService _categoryService = CategoryService();
+  final SupplierService _supplierService = SupplierService();
   final ProductImageUrlUseCase _imageUrlUseCase = const ProductImageUrlUseCase();
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
   String? _error;
   List<_InventoryItem> _items = const [];
+  Map<int, CategoryModel> _categoriesById = const {};
   String _searchQuery = '';
   String _selectedFilter = 'All Categories';
 
@@ -67,8 +77,25 @@ class _InventoryPageState extends State<InventoryPage> {
 
       final products = result[0] as List<ProductModel>;
       final inventories = result[1] as List<InventoryModel>;
+
+      final categoryIds = products
+          .map((p) => p.categoryId)
+          .whereType<int>()
+          .toSet()
+          .toList();
+
+      List<CategoryModel> categories = const [];
+      try {
+        categories = await _categoryService.getCategoriesByIds(categoryIds);
+      } catch (e) {
+        // Category is optional for list rendering; do not fail inventory page.
+        debugPrint('Failed to fetch categories: $e');
+      }
       final inventoryByProductId = <String, InventoryModel>{
         for (final inventory in inventories) inventory.productId: inventory,
+      };
+      final categoriesById = <int, CategoryModel>{
+        for (final category in categories) category.id: category,
       };
 
       final items = products
@@ -80,6 +107,7 @@ class _InventoryPageState extends State<InventoryPage> {
 
       setState(() {
         _items = items;
+        _categoriesById = categoriesById;
         _isLoading = false;
       });
     } catch (e) {
@@ -89,6 +117,621 @@ class _InventoryPageState extends State<InventoryPage> {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  String _resolveCategoryName(ProductModel product) {
+    final categoryId = product.categoryId;
+    if (categoryId == null) {
+      return 'Uncategorized';
+    }
+
+    return _categoriesById[categoryId]?.name ?? 'Category $categoryId';
+  }
+  Future<void> _deleteProduct(_InventoryItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Product'),
+          content: Text('Hapus produk "${item.product.name}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Hapus'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Delete inventory row first to avoid FK violations, then product.
+      if (item.inventory != null) {
+        await _inventoryService.deleteInventory(item.inventory!.id);
+      }
+      await _productService.deleteProduct(item.product.id);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Produk berhasil dihapus.')),
+      );
+      await _loadInventory();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menghapus produk: $e')),
+      );
+    }
+  }
+
+  Future<void> _addItemToWarehouse() async {
+    final nameController = TextEditingController();
+    final barcodeController = TextEditingController();
+    final imageUrlController = TextEditingController();
+    final costPriceController = TextEditingController();
+    final sellingPriceController = TextEditingController();
+    final stockController = TextEditingController(text: '0');
+    final thresholdController = TextEditingController(text: '5');
+
+    int? selectedCategoryId;
+    String? selectedSupplierId;
+
+    final categories = _categoriesById.values.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    List<SupplierModel> suppliers = const [];
+    try {
+      suppliers = await _supplierService.getSuppliersByStoreId(_defaultStoreId);
+    } catch (e) {
+      debugPrint('Failed to fetch suppliers for create form: $e');
+    }
+
+    if (!mounted) return;
+
+    final shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Tambah Item Gudang'),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 360,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nama Produk *',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: barcodeController,
+                        decoration: const InputDecoration(
+                          labelText: 'Barcode (opsional)',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: imageUrlController,
+                        decoration: const InputDecoration(
+                          labelText: 'Image URL (opsional)',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<int?>(
+                        initialValue: selectedCategoryId,
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Tanpa kategori'),
+                          ),
+                          ...categories.map(
+                            (category) => DropdownMenuItem<int?>(
+                              value: category.id,
+                              child: Text(category.name),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() => selectedCategoryId = value);
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Kategori',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String?>(
+                        initialValue: selectedSupplierId,
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Tanpa supplier'),
+                          ),
+                          ...suppliers.map(
+                            (supplier) => DropdownMenuItem<String?>(
+                              value: supplier.id,
+                              child: Text(supplier.name),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() => selectedSupplierId = value);
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Supplier',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: costPriceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Harga Modal *',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: sellingPriceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Harga Jual *',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: stockController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Stock Awal *',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: thresholdController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Low Stock Threshold *',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Batal'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Tambah'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    final name = nameController.text.trim();
+    final barcode = barcodeController.text.trim();
+    final imageUrl = imageUrlController.text.trim();
+    final costPrice = int.tryParse(costPriceController.text.trim());
+    final sellingPrice = int.tryParse(sellingPriceController.text.trim());
+    final initialStock = int.tryParse(stockController.text.trim());
+    final threshold = int.tryParse(thresholdController.text.trim());
+
+    nameController.dispose();
+    barcodeController.dispose();
+    imageUrlController.dispose();
+    costPriceController.dispose();
+    sellingPriceController.dispose();
+    stockController.dispose();
+    thresholdController.dispose();
+
+    if (!mounted || shouldCreate != true) return;
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nama produk wajib diisi.')),
+      );
+      return;
+    }
+
+    if (costPrice == null ||
+        sellingPrice == null ||
+        initialStock == null ||
+        threshold == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Field angka wajib diisi dengan benar.')),
+      );
+      return;
+    }
+
+    if (costPrice < 0 || sellingPrice < 0 || initialStock < 0 || threshold < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nilai angka tidak boleh negatif.')),
+      );
+      return;
+    }
+
+    try {
+      final productId = await _productService.createProductEntry(
+        storeId: _defaultStoreId,
+        name: name,
+        categoryId: selectedCategoryId,
+        supplierId: selectedSupplierId,
+        imageUrl: imageUrl.isEmpty ? null : imageUrl,
+        barcode: barcode.isEmpty ? null : barcode,
+      );
+
+      await _inventoryService.createInventoryEntry(
+        productId: productId,
+        costPrice: costPrice,
+        sellingPrice: sellingPrice,
+        stockQuantity: initialStock,
+        lowStockThreshold: threshold,
+        storeId: _defaultStoreId,
+      );
+
+      if (initialStock > 0) {
+        await _stockMovementService.createStockMovementEntry(
+          productId: productId,
+          type: 'IN',
+          quantity: initialStock,
+          stockAfter: initialStock,
+          note: 'Initial stock saat tambah item',
+          storeId: _defaultStoreId,
+        );
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Item berhasil ditambahkan ke gudang.')),
+      );
+      await _loadInventory();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menambah item: $e')),
+      );
+    }
+  }
+
+  Future<void> _editProduct(_InventoryItem item) async {
+    final nameController = TextEditingController(text: item.product.name);
+    final sellingController = TextEditingController(
+      text: item.inventory?.sellingPrice.toString() ?? '',
+    );
+    final thresholdController = TextEditingController(
+      text: item.inventory?.lowStockThreshold.toString() ?? '',
+    );
+
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Product'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Product Name'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: sellingController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Selling Price'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: thresholdController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Low Stock Threshold',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Simpan'),
+            ),
+          ],
+        );
+      },
+    );
+
+    final updatedName = nameController.text.trim();
+    final parsedSelling = int.tryParse(sellingController.text.trim());
+    final parsedThreshold = int.tryParse(thresholdController.text.trim());
+
+    nameController.dispose();
+    sellingController.dispose();
+    thresholdController.dispose();
+
+    if (!mounted || shouldSave != true) return;
+
+    if (updatedName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nama produk tidak boleh kosong.')),
+      );
+      return;
+    }
+
+    if (item.inventory != null) {
+      if (parsedSelling == null || parsedSelling < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Harga jual tidak valid.')),
+        );
+        return;
+      }
+
+      if (parsedThreshold == null || parsedThreshold < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Threshold tidak valid.')),
+        );
+        return;
+      }
+    }
+
+    final updatedProduct = ProductModel(
+      id: item.product.id,
+      storeId: item.product.storeId,
+      categoryId: item.product.categoryId,
+      supplierId: item.product.supplierId,
+      imageUrl: item.product.imageUrl,
+      name: updatedName,
+      barcode: item.product.barcode,
+      createdAt: item.product.createdAt,
+    );
+
+    try {
+      await _productService.updateProduct(updatedProduct);
+
+      if (item.inventory != null) {
+        final inv = item.inventory!;
+        final updatedInventory = InventoryModel(
+          id: inv.id,
+          productId: inv.productId,
+          costPrice: inv.costPrice,
+          sellingPrice: parsedSelling!,
+          stockQuantity: inv.stockQuantity,
+          lowStockThreshold: parsedThreshold!,
+          updatedAt: DateTime.now(),
+          storeId: inv.storeId,
+        );
+        await _inventoryService.updateInventory(updatedInventory);
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Produk berhasil diperbarui.')),
+      );
+      await _loadInventory();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal update produk: $e')),
+      );
+    }
+  }
+
+  Future<void> _changeStock({
+    required _InventoryItem item,
+    required bool isStockIn,
+  }) async {
+    final inventory = item.inventory;
+    if (inventory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Data inventory tidak ditemukan.')),
+      );
+      return;
+    }
+
+    final qtyController = TextEditingController();
+    final reasonController = TextEditingController();
+    final input = await showDialog<_StockChangeInput>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(isStockIn ? 'Stock In' : 'Stock Out'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: qtyController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Quantity',
+                    hintText: 'Masukkan jumlah',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: reasonController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Reason (optional)',
+                    hintText: 'Contoh: Retur supplier / Penjualan offline',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final parsed = int.tryParse(qtyController.text.trim());
+                if (parsed == null || parsed <= 0) {
+                  return;
+                }
+                Navigator.of(context).pop(
+                  _StockChangeInput(
+                    quantity: parsed,
+                    reason: reasonController.text.trim(),
+                  ),
+                );
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        );
+      },
+    );
+
+    qtyController.dispose();
+    reasonController.dispose();
+    if (!mounted) return;
+    if (input == null) return;
+
+    final newStock = isStockIn
+        ? inventory.stockQuantity + input.quantity
+        : inventory.stockQuantity - input.quantity;
+
+    if (newStock < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Stock tidak boleh minus.')),
+      );
+      return;
+    }
+
+    final updatedInventory = InventoryModel(
+      id: inventory.id,
+      productId: inventory.productId,
+      costPrice: inventory.costPrice,
+      sellingPrice: inventory.sellingPrice,
+      stockQuantity: newStock,
+      lowStockThreshold: inventory.lowStockThreshold,
+      updatedAt: DateTime.now(),
+      storeId: inventory.storeId,
+    );
+
+    try {
+      await _inventoryService.updateInventory(updatedInventory);
+      await _stockMovementService.createStockMovementEntry(
+        productId: inventory.productId,
+        type: isStockIn ? 'IN' : 'OUT',
+        quantity: input.quantity,
+        stockAfter: newStock,
+        note: input.reason.isNotEmpty
+            ? input.reason
+            : (isStockIn
+                ? 'Manual stock in from product detail'
+                : 'Manual stock out from product detail'),
+        storeId: inventory.storeId,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isStockIn ? 'Stock berhasil ditambah.' : 'Stock berhasil dikurangi.',
+          ),
+        ),
+      );
+      await _loadInventory();
+      
+      // Pop back to InventoryPage to show updated data
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal update stock: $e')),
+      );
+    }
+  }
+
+  Future<void> _navigateToProductDetail(_InventoryItem item) async {
+    try {
+      dynamic supplier;
+      dynamic category;
+      List<StockMovementModel> recentMovements = [];
+
+      // Fetch supplier if ID exists
+      if (item.product.supplierId != null) {
+        try {
+          supplier = await _supplierService.getSupplierById(item.product.supplierId!);
+        } catch (e) {
+          debugPrint('Failed to fetch supplier: $e');
+        }
+      }
+
+      // Fetch category if ID exists
+      if (item.product.categoryId != null) {
+        final categoryId = item.product.categoryId!;
+        category = _categoriesById[categoryId];
+
+        // Fallback: query single category if it is not present in cache.
+        if (category == null) {
+          try {
+            category = await _categoryService.getCategoryById(categoryId);
+          } catch (e) {
+            debugPrint('Failed to fetch category by id $categoryId: $e');
+          }
+        }
+      }
+
+      // Fetch recent movements
+      try {
+        recentMovements = await _stockMovementService.getStockMovementsByProductId(item.product.id);
+      } catch (e) {
+        debugPrint('Failed to fetch movements: $e');
+      }
+
+      if (!mounted) return;
+
+      // Navigate with complete data
+      final resolvedCategoryName = _resolveCategoryName(item.product);
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ProductDetailPage(
+            product: item.product,
+            inventory: item.inventory,
+            category: category,
+            categoryNameOverride: resolvedCategoryName,
+            supplier: supplier,
+            recentMovements: recentMovements,
+            onEdit: () => _editProduct(item),
+            onStockIn: () => _changeStock(item: item, isStockIn: true),
+            onStockOut: () => _changeStock(item: item, isStockIn: false),
+            onDelete: () => _deleteProduct(item),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('Error navigating to product detail: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
     }
   }
 
@@ -120,7 +763,7 @@ class _InventoryPageState extends State<InventoryPage> {
     return _items.where((item) {
       final nameMatches = query.isEmpty ||
           item.product.name.toLowerCase().contains(query) ||
-          item.product.barcode.toLowerCase().contains(query);
+          (item.product.barcode?.toLowerCase().contains(query) ?? false);
 
       if (!nameMatches) {
         return false;
@@ -287,6 +930,15 @@ class _InventoryPageState extends State<InventoryPage> {
                   ),
                 ),
               ),
+              OutlinedButton.icon(
+                onPressed: _addItemToWarehouse,
+                icon: const Icon(Icons.add_box_outlined, size: 18),
+                label: const Text('Tambah Item'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              const SizedBox(width: 6),
               IconButton(
                 onPressed: _loadInventory,
                 icon: const Icon(Icons.refresh_rounded),
@@ -361,20 +1013,13 @@ class _InventoryPageState extends State<InventoryPage> {
         final item = visibleItems[index - 1];
         final status = item.stockStatus;
         final imageUrl = _imageUrlUseCase.resolveImageUrl(item.product.imageUrl);
-        final proxyUrl = _imageUrlUseCase.proxyImageUrl(imageUrl);
+        final proxyUrl = (imageUrl != null) 
+			? _imageUrlUseCase.proxyImageUrl(imageUrl)
+			: null;
 
         return InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => ProductDetailPage(
-                  product: item.product,
-                  inventory: item.inventory,
-                ),
-              ),
-            );
-          },
+          onTap: () => _navigateToProductDetail(item),
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(12),
@@ -450,7 +1095,7 @@ class _InventoryPageState extends State<InventoryPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Category ${item.product.categoryId} • ${item.stockQuantity} units',
+                        '${_resolveCategoryName(item.product)} • ${item.stockQuantity} units',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textMedium,
@@ -491,11 +1136,6 @@ class _InventoryPageState extends State<InventoryPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add_rounded, color: Color(0xFF292524)),
-      ),
       body: Stack(
         children: [
           Column(
@@ -517,6 +1157,13 @@ class _InventoryPageState extends State<InventoryPage> {
       ),
     );
   }
+}
+
+class _StockChangeInput {
+  final int quantity;
+  final String reason;
+
+  const _StockChangeInput({required this.quantity, required this.reason});
 }
 
 class _InventoryItem {

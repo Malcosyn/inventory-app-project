@@ -3,7 +3,11 @@ import 'package:inventory_app_project/secrets/supabase_secret.dart';
 class ProductImageUrlUseCase {
   const ProductImageUrlUseCase();
 
-  String? resolveImageUrl(String rawValue) {
+  String? resolveImageUrl(String? rawValue) {
+    if (rawValue == null || rawValue.isEmpty) {
+      return null;
+    }
+    
     final value = rawValue.trim();
     if (value.isEmpty) {
       return null;

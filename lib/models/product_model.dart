@@ -7,21 +7,21 @@ String productModelToJson(List<ProductModel> data) => json.encode(List<dynamic>.
 class ProductModel {
   String id;
   int storeId;
-  int categoryId;
-  String supplierId;
-  String imageUrl;
+  int? categoryId;
+  String? supplierId;
+  String? imageUrl;
   String name;
-  String barcode;
+  String? barcode;
   DateTime createdAt;
 
   ProductModel({
     required this.id,
     required this.storeId,
-    required this.categoryId,
-    required this.supplierId,
-    required this.imageUrl,
+    this.categoryId,
+    this.supplierId,
+    this.imageUrl,
     required this.name,
-    required this.barcode,
+    this.barcode,
     required this.createdAt,
   });
 
