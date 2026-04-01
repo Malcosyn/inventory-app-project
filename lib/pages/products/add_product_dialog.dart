@@ -93,7 +93,7 @@ class AddProductDialog {
     if (!context.mounted || !shouldCreate) return false;
 
     if (name.isEmpty) {
-      _snack(context, 'Nama produk wajib diisi.');
+      _snack(context, 'Product name is required.');
       return false;
     }
 
@@ -101,12 +101,12 @@ class AddProductDialog {
         sellingPrice == null ||
         initialStock == null ||
         threshold == null) {
-      _snack(context, 'Field angka wajib diisi dengan benar.');
+      _snack(context, 'Numeric fields are required and must be valid.');
       return false;
     }
 
     if (costPrice < 0 || sellingPrice < 0 || initialStock < 0 || threshold < 0) {
-      _snack(context, 'Nilai angka tidak boleh negatif.');
+      _snack(context, 'Numeric values cannot be negative.');
       return false;
     }
 
@@ -135,18 +135,19 @@ class AddProductDialog {
           type: 'IN',
           quantity: initialStock,
           stockAfter: initialStock,
-          note: 'Initial stock saat tambah item',
+          reason: 'PURCHASE',
+          note: 'Initial stock when adding item',
           storeId: _defaultStoreId,
         );
       }
 
       if (!context.mounted) return false;
-      _snack(context, 'Item berhasil ditambahkan ke gudang.', success: true);
+      _snack(context, 'Item added to warehouse successfully.', success: true);
       onProductAdded();
       return true;
     } catch (e) {
       if (!context.mounted) return false;
-      _snack(context, 'Gagal menambah item: $e');
+      _snack(context, 'Failed to add item: $e');
       return false;
     }
   }
@@ -232,12 +233,12 @@ class _AddProductSheetState extends State<_AddProductSheet> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Pilih dari Galeri'),
+                title: const Text('Pick from Gallery'),
                 onTap: () => Navigator.of(context).pop(ImageSource.gallery),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Ambil dari Kamera'),
+                title: const Text('Take from Camera'),
                 onTap: () => Navigator.of(context).pop(ImageSource.camera),
               ),
             ],
@@ -284,7 +285,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
       setState(() {
         _isUploadingImage = false;
       });
-      _showSnack('Foto berhasil diupload.', success: true);
+      _showSnack('Photo uploaded successfully.', success: true);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -292,7 +293,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
       });
       final isLoggedIn = Supabase.instance.client.auth.currentUser != null;
       _showSnack(
-        'Upload gambar gagal. Login: ${isLoggedIn ? 'ya' : 'tidak'}. Error: $e',
+        'Image upload failed. Logged in: ${isLoggedIn ? 'yes' : 'no'}. Error: $e',
       );
     }
   }
@@ -322,7 +323,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
     }
 
     throw Exception(
-      'Semua bucket upload gagal (${_storageBuckets.join(', ')}). ${errors.join(' | ')}',
+      'All upload buckets failed (${_storageBuckets.join(', ')}). ${errors.join(' | ')}',
     );
   }
 
@@ -408,7 +409,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                                 items: [
                                   const DropdownMenuItem<int?>(
                                     value: null,
-                                    child: Text('Tanpa kategori'),
+                                    child: Text('No category'),
                                   ),
                                   ...widget.categories.map(
                                     (c) => DropdownMenuItem<int?>(
@@ -431,7 +432,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                                 items: [
                                   const DropdownMenuItem<String?>(
                                     value: null,
-                                    child: Text('Tanpa supplier'),
+                                    child: Text('No supplier'),
                                   ),
                                   ...widget.suppliers.map(
                                     (s) => DropdownMenuItem<String?>(
@@ -452,13 +453,13 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                           const SizedBox(height: 8),
                           _InputField(
                             controller: widget.barcodeController,
-                            hint: 'Scan atau ketik manual',
+                            hint: 'Scan or type manually',
                             icon: Icons.qr_code_rounded,
                           ),
                           const SizedBox(height: 14),
                           _ResponsiveTwoColumns(
                             left: _ColumnField(
-                              label: 'Harga Modal',
+                              label: 'Cost Price',
                               child: _InputField(
                                 controller: widget.costPriceController,
                                 hint: '0',
@@ -472,7 +473,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                               ),
                             ),
                             right: _ColumnField(
-                              label: 'Harga Jual',
+                              label: 'Selling Price',
                               child: _InputField(
                                 controller: widget.sellingPriceController,
                                 hint: '0',
@@ -489,7 +490,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                           const SizedBox(height: 14),
                           _ResponsiveTwoColumns(
                             left: _ColumnField(
-                              label: 'Stok Awal',
+                              label: 'Initial Stock',
                               child: _InputField(
                                 controller: widget.stockController,
                                 hint: '0',
@@ -503,7 +504,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                               ),
                             ),
                             right: _ColumnField(
-                              label: 'Batas Stok Rendah',
+                              label: 'Low Stock Threshold',
                               child: _InputField(
                                 controller: widget.thresholdController,
                                 hint: '5',
@@ -557,7 +558,7 @@ class _TopBar extends StatelessWidget {
               onPressed: onClose,
               icon: const Icon(Icons.arrow_back_rounded),
               color: _C.inkMid,
-              tooltip: 'Kembali',
+              tooltip: 'Back',
             ),
             const Text(
               'Add New Item',
@@ -913,7 +914,7 @@ class _BottomActions extends StatelessWidget {
                   label: Text(
                     isUploadingImage
                         ? 'Uploading Image...'
-                        : (canSaveAfterImagePick ? 'Save Item' : 'Upload gambar dulu'),
+                        : (canSaveAfterImagePick ? 'Save Item' : 'Upload image first'),
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                   ),
                 ),

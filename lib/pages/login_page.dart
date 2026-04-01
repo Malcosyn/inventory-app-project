@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
-import 'package:inventory_app_project/pages/home_page.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/services/auth_service.dart';
+import 'package:inventory_app_project/theme/app_theme.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({
@@ -29,13 +29,6 @@ class _LoginPageState extends State<LoginPage> {
   bool _rememberMe = false;
   bool _obscurePassword = true;
 
-  static const Color _primary = Color(0xFFF2C287);
-  static const Color _backgroundLight = Color(0xFFFAF7F2);
-  static const Color _textDark = Color(0xFF0F172A);
-  static const Color _textMedium = Color(0xFF64748B);
-  static const Color _textLabel = Color(0xFF334155);
-  static const Color _borderColor = Color(0xFFE2E8F0);
-
   @override
   void dispose() {
     _emailController.dispose();
@@ -46,7 +39,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _backgroundLight,
+      backgroundColor: AppColors.backgroundAlt,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
@@ -73,12 +66,12 @@ class _LoginPageState extends State<LoginPage> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: _primary.withValues(alpha: 0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
           ),
           child: const Icon(
             Icons.inventory_2_outlined,
-            color: _primary,
+            color: AppColors.primary,
             size: 48,
           ),
         ),
@@ -86,7 +79,7 @@ class _LoginPageState extends State<LoginPage> {
         const Text(
           'StockFlow',
           style: TextStyle(
-            color: _textDark,
+            color: AppColors.textDark,
             fontSize: 18,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.5,
@@ -103,7 +96,7 @@ class _LoginPageState extends State<LoginPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: AppColors.borderColor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -125,7 +118,7 @@ class _LoginPageState extends State<LoginPage> {
                     'Smart Inventory for Your Store',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: _textDark,
+                      color: AppColors.textDark,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       height: 1.3,
@@ -135,7 +128,7 @@ class _LoginPageState extends State<LoginPage> {
                   Text(
                     'Efficiently manage your minimarket stock',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: _textMedium, fontSize: 13),
+                    style: TextStyle(color: AppColors.textMedium, fontSize: 13),
                   ),
                 ],
               ),
@@ -153,15 +146,15 @@ class _LoginPageState extends State<LoginPage> {
               validator: (value) {
                 final email = (value ?? '').trim();
                 if (email.isEmpty) {
-                  return 'Email wajib diisi';
+                  return 'Email is required';
                 }
                 final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
                 if (!emailRegex.hasMatch(email)) {
-                  return 'Format email tidak valid';
+                  return 'Invalid email format';
                 }
                 return null;
               },
-              style: const TextStyle(color: _textDark, fontSize: 14),
+              style: const TextStyle(color: AppColors.textDark, fontSize: 14),
               decoration: _inputDecoration(
                 hint: 'name@store.com',
                 prefixIcon: Icons.mail_outline_rounded,
@@ -177,7 +170,7 @@ class _LoginPageState extends State<LoginPage> {
                   child: const Text(
                     'Forgot password?',
                     style: TextStyle(
-                      color: _primary,
+                      color: AppColors.primary,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -193,10 +186,10 @@ class _LoginPageState extends State<LoginPage> {
               autovalidateMode: AutovalidateMode.onUserInteraction,
               validator: (value) {
                 final password = (value ?? '').trim();
-                if (password.isEmpty) return 'Password wajib diisi';
+                if (password.isEmpty) return 'Password is required';
                 return null;
               },
-              style: const TextStyle(color: _textDark, fontSize: 14),
+              style: const TextStyle(color: AppColors.textDark, fontSize: 14),
               decoration: _inputDecoration(
                 hint: '••••••••',
                 prefixIcon: Icons.lock_outline_rounded,
@@ -222,11 +215,11 @@ class _LoginPageState extends State<LoginPage> {
                   height: 18,
                   child: Checkbox(
                     value: _rememberMe,
-                    activeColor: _primary,
+                    activeColor: AppColors.primary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    side: const BorderSide(color: AppColors.checkboxBorder),
                     onChanged: isLoading
                         ? null
                         : (v) => setState(() => _rememberMe = v ?? false),
@@ -235,7 +228,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(width: 8),
                 const Text(
                   'Remember this device',
-                  style: TextStyle(color: _textMedium, fontSize: 13),
+                  style: TextStyle(color: AppColors.textMedium, fontSize: 13),
                 ),
               ],
             ),
@@ -245,28 +238,28 @@ class _LoginPageState extends State<LoginPage> {
               child: ElevatedButton(
                 onPressed: isLoading
                     ? null
-                    : () async{
+                    : () async {
                         if (_formKey.currentState!.validate()) {
                           service.signInWithEmailAndPassword(
                             _emailController.text,
                             _passwordController.text,
                           );
-                          Navigator.push(
+                          Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const HomePage(),
+                              builder: (context) => const AppShellPage(),
                             ),
                           );
                         }
                       },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
+                  backgroundColor: AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                   elevation: 4,
-                  shadowColor: _primary.withValues(alpha: 0.4),
+                  shadowColor: AppColors.primary.withValues(alpha: 0.4),
                 ),
                 child: isLoading
                     ? const SizedBox(
@@ -282,21 +275,21 @@ class _LoginPageState extends State<LoginPage> {
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
-                              color: Color(0xFF292524),
+                              color: AppColors.textOnPrimary,
                             ),
                           ),
                           SizedBox(width: 8),
                           Icon(
                             Icons.login_rounded,
                             size: 20,
-                            color: Color(0xFF292524),
+                            color: AppColors.textOnPrimary,
                           ),
                         ],
                       ),
               ),
             ),
             const SizedBox(height: 24),
-            const Divider(color: Color(0xFFF1F5F9), thickness: 1),
+            const Divider(color: AppColors.borderLight, thickness: 1),
             const SizedBox(height: 16),
             Center(
               child: TextButton(
@@ -304,7 +297,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: const Text(
                   'Belum punya akun? Sign up',
                   style: TextStyle(
-                    color: _primary,
+                    color: AppColors.primary,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
@@ -321,9 +314,9 @@ class _LoginPageState extends State<LoginPage> {
     return Container(
       height: 128,
       decoration: BoxDecoration(
-        color: _primary.withValues(alpha: 0.2),
+        color: AppColors.primary.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _primary.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
         image: const DecorationImage(
           image: NetworkImage(
             'https://lh3.googleusercontent.com/aida-public/AB6AXuCSNQbnG71k8XzHn76UxkOztOsy7VtJkdlV7d4F66R9Qhs_t3DrJqIeg4nAGcenL49qudDYJJ4Kwm4asV61QzUv7tpLH6njWbsG7eM1jMXf7bQ4sdHEAL0vtPHjFAVxR1AyCkl2JYsK4bDK6mnYFP-458yub9CsyQZdw5NaD6wa23Ja1eg6rT8heQdfhssuFQ7fvt5CAZymsco7SJYMJ-8ZE_cG49lVpGPyD4uD5vJSxbT_rdjmR4zACSwYXKVebYjVWc-XjeMqAv8',
@@ -338,7 +331,7 @@ class _LoginPageState extends State<LoginPage> {
     return Text(
       label,
       style: const TextStyle(
-        color: _textLabel,
+        color: AppColors.textLabel,
         fontSize: 13,
         fontWeight: FontWeight.w600,
       ),
@@ -364,11 +357,11 @@ class _LoginPageState extends State<LoginPage> {
       fillColor: Colors.white,
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: _borderColor),
+        borderSide: const BorderSide(color: AppColors.borderColor),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: _primary, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -380,13 +373,13 @@ class _LoginPageState extends State<LoginPage> {
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: _borderColor),
+        borderSide: const BorderSide(color: AppColors.borderColor),
       ),
     );
   }
 
   Widget _buildFooterLinks() {
-    const linkStyle = TextStyle(color: Color(0xFF94A3B8), fontSize: 13);
+    const linkStyle = TextStyle(color: AppColors.textLight, fontSize: 13);
     const links = ['Privacy Policy', 'Terms of Service', 'Help Center'];
 
     return Wrap(

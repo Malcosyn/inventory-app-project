@@ -10,6 +10,7 @@ class StockMovementModel {
   String type;
   int quantity;
   int stockAfter;
+  String reason;
   String note;
   DateTime createdAt;
   int storeId;
@@ -20,6 +21,7 @@ class StockMovementModel {
     required this.type,
     required this.quantity,
     required this.stockAfter,
+    required this.reason,
     required this.note,
     required this.createdAt,
     required this.storeId,
@@ -31,6 +33,7 @@ class StockMovementModel {
     type: json["type"],
     quantity: json["quantity"],
     stockAfter: json["stock_after"],
+    reason: (json["reason"] ?? '').toString(),
     note: json["note"],
     createdAt: DateTime.parse(json["created_at"]),
     storeId: json["store_id"],
@@ -42,6 +45,7 @@ class StockMovementModel {
     "type": type,
     "quantity": quantity,
     "stock_after": stockAfter,
+    "reason": reason,
     "note": note,
     "created_at": createdAt.toIso8601String(),
     "store_id": storeId,

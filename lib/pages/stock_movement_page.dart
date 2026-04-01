@@ -3,10 +3,13 @@ import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
 import 'package:inventory_app_project/pages/order_page.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
+import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
 
 class StockMovementPage extends StatelessWidget {
-  const StockMovementPage({super.key});
+  final bool showBottomNav;
+
+  const StockMovementPage({super.key, this.showBottomNav = true});
 
   void _onBottomNavChanged(BuildContext context, int index) {
     final Widget page;
@@ -46,15 +49,16 @@ class StockMovementPage extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: BottomNavigation(
-              selectedIndex: 3,
-              onNavChanged: (index) => _onBottomNavChanged(context, index),
+          if (showBottomNav)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: BottomNavigation(
+                selectedIndex: 3,
+                onNavChanged: (index) => _onBottomNavChanged(context, index),
+              ),
             ),
-          ),
         ],
       ),
     );

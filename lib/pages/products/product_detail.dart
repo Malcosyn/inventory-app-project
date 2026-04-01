@@ -4,51 +4,34 @@ import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
+import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/usecases/products/product_detail_usecase.dart';
 import 'package:inventory_app_project/usecases/products/product_image_url_usecase.dart';
 
-// ─── Palette ────────────────────────────────────────────────────────────────
-class _C {
-  static const bg         = Color(0xFFF5F3EF);
-  static const surface    = Color(0xFFFFFFFF);
-  static const border     = Color(0xFFE8E4DC);
-  static const ink        = Color(0xFF1A1611);
-  static const inkMid     = Color(0xFF6B6560);
-  static const inkLight   = Color(0xFFA09A93);
-  static const accent     = Color(0xFF2563EB);   // vivid blue
-  static const accentBg   = Color(0xFFEFF4FF);
-  static const green      = Color(0xFF16A34A);
-  static const greenBg    = Color(0xFFDCFCE7);
-  static const amber      = Color(0xFFD97706);
-  static const amberBg    = Color(0xFFFEF3C7);
-  static const red        = Color(0xFFDC2626);
-  static const redBg      = Color(0xFFFEE2E2);
-}
-
-// ─── Text styles ────────────────────────────────────────────────────────────
+// ─── Shared Text Styles ──────────────────────────────────────────────────────
 class _T {
   static const displayName = TextStyle(
     fontSize: 20,
     fontWeight: FontWeight.w800,
-    color: _C.ink,
+    color: AppColors.textDark,
     height: 1.2,
     letterSpacing: -0.4,
   );
   static const sectionTitle = TextStyle(
     fontSize: 11,
-    fontWeight: FontWeight.w700,
-    color: _C.inkLight,
-    letterSpacing: 1.2,
+    fontWeight: FontWeight.w800,
+    color: AppColors.textMedium,
+    letterSpacing: 1.0,
   );
   static const label = TextStyle(
     fontSize: 13.5,
-    color: _C.inkMid,
+    color: AppColors.textMedium,
     fontWeight: FontWeight.w400,
   );
   static const value = TextStyle(
     fontSize: 13.5,
     fontWeight: FontWeight.w600,
-    color: _C.ink,
+    color: AppColors.textDark,
   );
   static const tag = TextStyle(
     fontSize: 11,
@@ -57,9 +40,41 @@ class _T {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  ProductDetailPage
-// ═══════════════════════════════════════════════════════════════════════════
+// ─── Stock State ─────────────────────────────────────────────────────────────
+enum _StockState {
+  inStock(
+    label: 'In Stock',
+    color: Color(0xFF16A34A),
+    bgColor: Color(0xFFDCFCE7),
+  ),
+  low(
+    label: 'Low Stock',
+    color: AppColors.accentOrangeText,
+    bgColor: AppColors.accentOrangeBg,
+  ),
+  out(
+    label: 'Out of Stock',
+    color: AppColors.errorText,
+    bgColor: AppColors.errorBg,
+  );
+
+  final String label;
+  final Color color, bgColor;
+
+  const _StockState({
+    required this.label,
+    required this.color,
+    required this.bgColor,
+  });
+
+  static _StockState fromDomain(ProductStockState state) => switch (state) {
+    ProductStockState.inStock => _StockState.inStock,
+    ProductStockState.low     => _StockState.low,
+    ProductStockState.out     => _StockState.out,
+  };
+}
+
+// ProductDetailPage
 class ProductDetailPage extends StatelessWidget {
   final ProductModel product;
   final InventoryModel? inventory;
@@ -96,46 +111,26 @@ class ProductDetailPage extends StatelessWidget {
         (product.categoryId != null ? 'Category ${product.categoryId}' : 'Uncategorized');
 
     return Scaffold(
-      backgroundColor: _C.bg,
-      // ── AppBar ────────────────────────────────────────────────────────────
+      backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
-        backgroundColor: _C.bg,
+        backgroundColor: AppColors.backgroundLight,
         elevation: 0,
         scrolledUnderElevation: 0,
-        surfaceTintColor: _C.bg,
+        surfaceTintColor: AppColors.backgroundLight,
         titleSpacing: 0,
         title: const Text(
           'Product Detail',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,
-            color: _C.ink,
+            color: AppColors.textDark,
             letterSpacing: -0.2,
           ),
         ),
-        iconTheme: const IconThemeData(color: _C.ink),
-        actions: [
-          if (onEdit != null)
-            _AppBarButton(
-              icon: Icons.edit_outlined,
-              color: _C.accent,
-              onTap: onEdit!,
-            ),
-          if (onDelete != null)
-            _AppBarButton(
-              icon: Icons.delete_outline_rounded,
-              color: _C.red,
-              onTap: onDelete!,
-            ),
-          const SizedBox(width: 4),
-        ],
       ),
-
-      // ── Body ──────────────────────────────────────────────────────────────
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         children: [
-          // Hero header
           _HeroCard(
             product: product,
             categoryName: catName,
@@ -144,20 +139,14 @@ class ProductDetailPage extends StatelessWidget {
             stateColor: stockState.color,
             stateBgColor: stockState.bgColor,
           ),
-
           const SizedBox(height: 8),
-
-          // Quick stats row
           _QuickStatsRow(
             stock: vm.stock,
             threshold: vm.threshold,
             stockValue: 'Rp${vm.stockValue}',
             stockState: stockState,
           ),
-
           const SizedBox(height: 16),
-
-          // Price card
           _SectionLabel('PRICING'),
           const SizedBox(height: 8),
           _PriceCard(
@@ -166,17 +155,11 @@ class ProductDetailPage extends StatelessWidget {
             margin: 'Rp${vm.margin}',
             marginPositive: vm.margin >= 0,
           ),
-
           const SizedBox(height: 16),
-
-          // Supplier card
           _SectionLabel('SUPPLIER'),
           const SizedBox(height: 8),
           _SupplierCard(supplier: supplier),
-
           const SizedBox(height: 16),
-
-          // Product info
           _SectionLabel('PRODUCT INFO'),
           const SizedBox(height: 8),
           _InfoCard(
@@ -185,19 +168,13 @@ class ProductDetailPage extends StatelessWidget {
               _RowData('Created At', _formatDate(product.createdAt), isLast: true),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // Movements
           _SectionLabel('RECENT STOCK MOVEMENTS'),
           const SizedBox(height: 8),
           _MovementsCard(movements: recentMovements),
-
           const SizedBox(height: 16),
         ],
       ),
-
-      // ── Bottom action bar ─────────────────────────────────────────────────
       bottomNavigationBar: _BottomActions(
         onEdit: onEdit,
         onStockIn: onStockIn,
@@ -213,7 +190,7 @@ class ProductDetailPage extends StatelessWidget {
   }
 }
 
-// ─── AppBar icon button ──────────────────────────────────────────────────────
+// AppBar Icon Button
 class _AppBarButton extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -228,8 +205,9 @@ class _AppBarButton extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: AppColors.iconBgLight,
           borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.borderColor),
         ),
         child: Icon(icon, color: color, size: 20),
       ),
@@ -237,7 +215,7 @@ class _AppBarButton extends StatelessWidget {
   }
 }
 
-// ─── Section label ───────────────────────────────────────────────────────────
+// Section Label
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
@@ -249,9 +227,7 @@ class _SectionLabel extends StatelessWidget {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Hero Card
-// ═══════════════════════════════════════════════════════════════════════════
+// Hero Card
 class _HeroCard extends StatelessWidget {
   final ProductModel product;
   final String categoryName;
@@ -277,12 +253,12 @@ class _HeroCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: _C.surface,
+        color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _C.border),
+        border: Border.all(color: AppColors.borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -291,17 +267,16 @@ class _HeroCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image strip
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             child: Container(
               height: 180,
               width: double.infinity,
-              color: const Color(0xFFF0EDE8),
+              color: AppColors.backgroundAlt,
               child: imageUrl == null
                   ? const Center(
                       child: Icon(Icons.inventory_2_outlined,
-                          size: 56, color: Color(0xFFC4BDB5)),
+                          size: 56, color: AppColors.textLight),
                     )
                   : _ProductDetailImage(
                       primaryUrl: imageUrl,
@@ -310,8 +285,6 @@ class _HeroCard extends StatelessWidget {
                     ),
             ),
           ),
-
-          // Info row
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -326,21 +299,18 @@ class _HeroCard extends StatelessWidget {
                       Row(
                         children: [
                           const Icon(Icons.folder_outlined,
-                              size: 13, color: _C.inkLight),
+                              size: 13, color: AppColors.textLight),
                           const SizedBox(width: 4),
                           Text(categoryName,
                               style: const TextStyle(
-                                  fontSize: 13, color: _C.inkMid)),
+                                  fontSize: 13, color: AppColors.textMedium)),
                         ],
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                _StatusBadge(
-                    label: stockLabel,
-                    fg: stateColor,
-                    bg: stateBgColor),
+                _StatusBadge(label: stockLabel, fg: stateColor, bg: stateBgColor),
               ],
             ),
           ),
@@ -350,7 +320,7 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-// ─── Status badge ────────────────────────────────────────────────────────────
+// Status Badge
 class _StatusBadge extends StatelessWidget {
   final String label;
   final Color fg, bg;
@@ -362,7 +332,7 @@ class _StatusBadge extends StatelessWidget {
     decoration: BoxDecoration(
       color: bg,
       borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: fg.withOpacity(0.25)),
+      border: Border.all(color: fg.withValues(alpha: 0.25)),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -378,9 +348,7 @@ class _StatusBadge extends StatelessWidget {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Quick Stats Row
-// ═══════════════════════════════════════════════════════════════════════════
+// Quick Stats Row
 class _QuickStatsRow extends StatelessWidget {
   final int stock;
   final int threshold;
@@ -408,16 +376,16 @@ class _QuickStatsRow extends StatelessWidget {
         const SizedBox(width: 8),
         _StatTile(
           icon: Icons.warning_amber_rounded,
-          iconColor: _C.amber,
-          iconBg: _C.amberBg,
+          iconColor: AppColors.accentOrangeText,
+          iconBg: AppColors.accentOrangeBg,
           label: 'Low Threshold',
           value: '$threshold unit',
         ),
         const SizedBox(width: 8),
         _StatTile(
           icon: Icons.account_balance_wallet_outlined,
-          iconColor: _C.accent,
-          iconBg: _C.accentBg,
+          iconColor: AppColors.textOnPrimary,
+          iconBg: AppColors.primary,
           label: 'Stock Value',
           value: stockValue,
           compact: true,
@@ -448,15 +416,23 @@ class _StatTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: _C.surface,
+          color: AppColors.cardBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _C.border),
+          border: Border.all(color: AppColors.borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: iconBg,
                 borderRadius: BorderRadius.circular(8),
@@ -466,7 +442,7 @@ class _StatTile extends StatelessWidget {
             const SizedBox(height: 8),
             Text(label,
                 style: const TextStyle(
-                    fontSize: 10.5, color: _C.inkLight, fontWeight: FontWeight.w500),
+                    fontSize: 10.5, color: AppColors.textLight, fontWeight: FontWeight.w500),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
             const SizedBox(height: 2),
@@ -474,7 +450,7 @@ class _StatTile extends StatelessWidget {
                 style: TextStyle(
                     fontSize: compact ? 11.5 : 13,
                     fontWeight: FontWeight.w700,
-                    color: _C.ink),
+                    color: AppColors.textDark),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
           ],
@@ -484,9 +460,7 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Price Card
-// ═══════════════════════════════════════════════════════════════════════════
+// Price Card
 class _PriceCard extends StatelessWidget {
   final String costPrice, sellingPrice, margin;
   final bool marginPositive;
@@ -500,23 +474,36 @@ class _PriceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const greenColor = Color(0xFF16A34A);
+    const greenBg    = Color(0xFFDCFCE7);
+
     return Container(
       decoration: BoxDecoration(
-        color: _C.surface,
+        color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.border),
+        border: Border.all(color: AppColors.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
           _PriceRow(label: 'Cost Price', value: costPrice),
           _Divider(),
-          _PriceRow(label: 'Selling Price', value: sellingPrice,
-              valueStyle: _T.value.copyWith(color: _C.accent)),
+          _PriceRow(
+            label: 'Selling Price',
+            value: sellingPrice,
+            valueStyle: _T.value.copyWith(color: AppColors.terracotta),
+          ),
           _Divider(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: marginPositive ? _C.greenBg : _C.redBg,
+              color: marginPositive ? greenBg : AppColors.errorBg,
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
             ),
             child: Row(
@@ -526,16 +513,16 @@ class _PriceCard extends StatelessWidget {
                       ? Icons.trending_up_rounded
                       : Icons.trending_down_rounded,
                   size: 16,
-                  color: marginPositive ? _C.green : _C.red,
+                  color: marginPositive ? greenColor : AppColors.errorText,
                 ),
                 const SizedBox(width: 8),
                 Text('Margin per Item',
                     style: _T.label.copyWith(
-                        color: marginPositive ? _C.green : _C.red)),
+                        color: marginPositive ? greenColor : AppColors.errorText)),
                 const Spacer(),
                 Text(margin,
                     style: _T.value.copyWith(
-                        color: marginPositive ? _C.green : _C.red)),
+                        color: marginPositive ? greenColor : AppColors.errorText)),
               ],
             ),
           ),
@@ -564,12 +551,10 @@ class _PriceRow extends StatelessWidget {
 class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
-      const Divider(height: 1, thickness: 1, color: _C.border, indent: 16, endIndent: 16);
+      const Divider(height: 1, thickness: 1, color: AppColors.borderColor, indent: 16, endIndent: 16);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Supplier Card
-// ═══════════════════════════════════════════════════════════════════════════
+// Supplier Card
 class _SupplierCard extends StatelessWidget {
   final SupplierModel? supplier;
   const _SupplierCard({required this.supplier});
@@ -580,24 +565,32 @@ class _SupplierCard extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: _C.surface,
+          color: AppColors.cardBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _C.border),
+          border: Border.all(color: AppColors.borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: AppColors.iconBgLight,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.person_off_outlined,
-                  size: 18, color: _C.inkLight),
+                  size: 20, color: AppColors.textLight),
             ),
             const SizedBox(width: 12),
             const Text('No supplier assigned',
-                style: TextStyle(color: _C.inkMid, fontSize: 13.5)),
+                style: TextStyle(color: AppColors.textMedium, fontSize: 13.5)),
           ],
         ),
       );
@@ -605,28 +598,40 @@ class _SupplierCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: _C.surface,
+        color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.border),
+        border: Border.all(color: AppColors.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          // Supplier header
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: _C.accentBg,
-                  child: Text(
-                    supplier!.name.isNotEmpty
-                        ? supplier!.name[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      color: _C.accent,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Center(
+                    child: Text(
+                      supplier!.name.isNotEmpty
+                          ? supplier!.name[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        color: AppColors.textOnPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ),
@@ -638,12 +643,12 @@ class _SupplierCard extends StatelessWidget {
                       Text(supplier!.name,
                           style: const TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: _C.ink,
+                              color: AppColors.textDark,
                               fontSize: 14)),
                       if (supplier!.email?.isNotEmpty ?? false)
                         Text(supplier!.email!,
                             style: const TextStyle(
-                                color: _C.inkMid, fontSize: 12),
+                                color: AppColors.textMedium, fontSize: 12),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis),
                     ],
@@ -653,13 +658,12 @@ class _SupplierCard extends StatelessWidget {
             ),
           ),
           if (supplier!.phone.isNotEmpty || (supplier!.address.isNotEmpty)) ...[
-            const Divider(height: 1, thickness: 1, color: _C.border),
+            const Divider(height: 1, thickness: 1, color: AppColors.borderColor),
             _InfoCard(
               rounded: false,
               rows: [
                 if (supplier!.phone.isNotEmpty)
-                  _RowData('Phone', supplier!.phone,
-                      icon: Icons.phone_outlined),
+                  _RowData('Phone', supplier!.phone, icon: Icons.phone_outlined),
                 if (supplier!.address.isNotEmpty)
                   _RowData('Address', supplier!.address,
                       icon: Icons.location_on_outlined, isLast: true),
@@ -672,9 +676,7 @@ class _SupplierCard extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Generic Info Card
-// ═══════════════════════════════════════════════════════════════════════════
+// Info Card
 class _RowData {
   final String label, value;
   final IconData? icon;
@@ -692,9 +694,16 @@ class _InfoCard extends StatelessWidget {
     return Container(
       decoration: rounded
           ? BoxDecoration(
-              color: _C.surface,
+              color: AppColors.cardBg,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _C.border),
+              border: Border.all(color: AppColors.borderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             )
           : null,
       child: Column(
@@ -708,7 +717,7 @@ class _InfoCard extends StatelessWidget {
                 child: Row(
                   children: [
                     if (row.icon != null) ...[
-                      Icon(row.icon, size: 15, color: _C.inkLight),
+                      Icon(row.icon, size: 15, color: AppColors.textLight),
                       const SizedBox(width: 8),
                     ],
                     Text(row.label, style: _T.label),
@@ -725,11 +734,9 @@ class _InfoCard extends StatelessWidget {
               ),
               if (!row.isLast && i < rows.length - 1)
                 const Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: _C.border,
-                    indent: 16,
-                    endIndent: 16),
+                    height: 1, thickness: 1,
+                    color: AppColors.borderColor,
+                    indent: 16, endIndent: 16),
             ],
           );
         }).toList(),
@@ -738,30 +745,38 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Movements Card
-// ═══════════════════════════════════════════════════════════════════════════
+// Movements Card
 class _MovementsCard extends StatelessWidget {
   final List<StockMovementModel> movements;
   const _MovementsCard({required this.movements});
 
   @override
   Widget build(BuildContext context) {
+    const greenColor = Color(0xFF16A34A);
+    const greenBg    = Color(0xFFDCFCE7);
+
     if (movements.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: _C.surface,
+          color: AppColors.cardBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _C.border),
+          border: Border.all(color: AppColors.borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: const Center(
           child: Column(
             children: [
-              Icon(Icons.swap_horiz_rounded, size: 32, color: _C.inkLight),
+              Icon(Icons.swap_horiz_rounded, size: 32, color: AppColors.textLight),
               SizedBox(height: 8),
               Text('No movement data yet.',
-                  style: TextStyle(color: _C.inkMid, fontSize: 13.5)),
+                  style: TextStyle(color: AppColors.textMedium, fontSize: 13.5)),
             ],
           ),
         ),
@@ -770,9 +785,16 @@ class _MovementsCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: _C.surface,
+        color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.border),
+        border: Border.all(color: AppColors.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: movements.take(10).toList().asMap().entries.map((e) {
@@ -786,21 +808,19 @@ class _MovementsCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 child: Row(
                   children: [
-                    // Icon
                     Container(
                       width: 36, height: 36,
                       decoration: BoxDecoration(
-                        color: isIn ? _C.greenBg : _C.redBg,
+                        color: isIn ? greenBg : AppColors.errorBg,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
                         isIn ? Icons.south_west_rounded : Icons.north_east_rounded,
-                        color: isIn ? _C.green : _C.red,
+                        color: isIn ? greenColor : AppColors.errorText,
                         size: 17,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Label + note
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -808,10 +828,9 @@ class _MovementsCard extends StatelessWidget {
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: isIn ? _C.greenBg : _C.redBg,
+                                  color: isIn ? greenBg : AppColors.errorBg,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -819,7 +838,7 @@ class _MovementsCard extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
-                                    color: isIn ? _C.green : _C.red,
+                                    color: isIn ? greenColor : AppColors.errorText,
                                   ),
                                 ),
                               ),
@@ -829,7 +848,7 @@ class _MovementsCard extends StatelessWidget {
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13.5,
-                                  color: _C.ink,
+                                  color: AppColors.textDark,
                                 ),
                               ),
                             ],
@@ -837,26 +856,24 @@ class _MovementsCard extends StatelessWidget {
                           const SizedBox(height: 2),
                           Text(
                             '${_fmt(m.createdAt)}${m.note.isNotEmpty ? '  ·  ${m.note}' : ''}',
-                            style: const TextStyle(
-                                fontSize: 11.5, color: _C.inkMid),
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.textMedium),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    // Stock after
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         const Text('after',
-                            style: TextStyle(fontSize: 10, color: _C.inkLight)),
+                            style: TextStyle(fontSize: 10, color: AppColors.textLight)),
                         Text(
                           '${m.stockAfter}',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
-                            color: _C.ink,
+                            color: AppColors.textDark,
                           ),
                         ),
                       ],
@@ -866,11 +883,9 @@ class _MovementsCard extends StatelessWidget {
               ),
               if (!isLast)
                 const Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: _C.border,
-                    indent: 62,
-                    endIndent: 16),
+                    height: 1, thickness: 1,
+                    color: AppColors.borderColor,
+                    indent: 62, endIndent: 16),
             ],
           );
         }).toList(),
@@ -882,9 +897,7 @@ class _MovementsCard extends StatelessWidget {
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Bottom Actions Bar
-// ═══════════════════════════════════════════════════════════════════════════
+// Bottom Actions Bar
 class _BottomActions extends StatelessWidget {
   final VoidCallback? onEdit, onStockIn, onStockOut;
   const _BottomActions({this.onEdit, this.onStockIn, this.onStockOut});
@@ -895,12 +908,11 @@ class _BottomActions extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(
           16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
-        color: _C.surface,
-        border: Border(top: BorderSide(color: _C.border)),
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppColors.borderColor)),
       ),
       child: Row(
         children: [
-          // Edit (secondary)
           _ActionBtn(
             label: 'Edit',
             icon: Icons.edit_outlined,
@@ -908,25 +920,25 @@ class _BottomActions extends StatelessWidget {
             variant: _BtnVariant.outline,
           ),
           const SizedBox(width: 8),
-          // Stock In
           Expanded(
             child: _ActionBtn(
               label: 'Stock In',
               icon: Icons.add_rounded,
               onTap: onStockIn,
               variant: _BtnVariant.filled,
-              fillColor: _C.green,
+              fillColor: AppColors.primary,
+              textColor: AppColors.textOnPrimary,
             ),
           ),
           const SizedBox(width: 8),
-          // Stock Out
           Expanded(
             child: _ActionBtn(
               label: 'Stock Out',
               icon: Icons.remove_rounded,
               onTap: onStockOut,
               variant: _BtnVariant.filled,
-              fillColor: _C.red,
+              fillColor: AppColors.darkSurface,
+              textColor: Colors.white,
             ),
           ),
         ],
@@ -943,6 +955,7 @@ class _ActionBtn extends StatelessWidget {
   final VoidCallback? onTap;
   final _BtnVariant variant;
   final Color? fillColor;
+  final Color? textColor;
 
   const _ActionBtn({
     required this.label,
@@ -950,11 +963,13 @@ class _ActionBtn extends StatelessWidget {
     required this.onTap,
     required this.variant,
     this.fillColor,
+    this.textColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final isOutline = variant == _BtnVariant.outline;
+    final fgColor = isOutline ? AppColors.textDark : (textColor ?? Colors.white);
     return SizedBox(
       height: 48,
       child: Material(
@@ -967,23 +982,21 @@ class _ActionBtn extends StatelessWidget {
             decoration: isOutline
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: _C.border, width: 1.5),
+                    border: Border.all(color: AppColors.borderColor, width: 1.5),
                   )
                 : null,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon,
-                    size: 18,
-                    color: isOutline ? _C.ink : Colors.white),
+                Icon(icon, size: 18, color: fgColor),
                 const SizedBox(width: 6),
                 Text(
                   label,
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 13.5,
-                    color: isOutline ? _C.ink : Colors.white,
+                    color: fgColor,
                   ),
                 ),
               ],
@@ -995,9 +1008,7 @@ class _ActionBtn extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Product Image (unchanged logic, same fallback pattern)
-// ═══════════════════════════════════════════════════════════════════════════
+// Product Image
 class _ProductDetailImage extends StatefulWidget {
   final String primaryUrl;
   final String? fallbackUrl;
@@ -1034,10 +1045,9 @@ class _ProductDetailImageState extends State<_ProductDetailImage> {
           child: CircularProgressIndicator(
             strokeWidth: 2,
             value: progress.expectedTotalBytes != null
-                ? progress.cumulativeBytesLoaded /
-                    progress.expectedTotalBytes!
+                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
                 : null,
-            color: _C.accent,
+            color: AppColors.primary,
           ),
         );
       },
@@ -1053,34 +1063,9 @@ class _ProductDetailImageState extends State<_ProductDetailImage> {
           return const SizedBox.shrink();
         }
         return const Center(
-          child: Icon(Icons.inventory_2_outlined,
-              size: 48, color: Color(0xFFC4BDB5)),
+          child: Icon(Icons.inventory_2_outlined, size: 48, color: AppColors.textLight),
         );
       },
     );
   }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  Domain enum (unchanged)
-// ═══════════════════════════════════════════════════════════════════════════
-enum _StockState {
-  inStock(label: 'In Stock',    color: _C.green, bgColor: _C.greenBg),
-  low    (label: 'Low Stock',   color: _C.amber, bgColor: _C.amberBg),
-  out    (label: 'Out of Stock',color: _C.red,   bgColor: _C.redBg);
-
-  final String label;
-  final Color color, bgColor;
-
-  const _StockState({
-    required this.label,
-    required this.color,
-    required this.bgColor,
-  });
-
-  static _StockState fromDomain(ProductStockState state) => switch (state) {
-    ProductStockState.inStock => _StockState.inStock,
-    ProductStockState.low     => _StockState.low,
-    ProductStockState.out     => _StockState.out,
-  };
 }

@@ -102,7 +102,7 @@ class EditProductDialog {
 
     if (updatedName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama produk tidak boleh kosong.')),
+        const SnackBar(content: Text('Product name cannot be empty.')),
       );
       return;
     }
@@ -110,19 +110,19 @@ class EditProductDialog {
     if (inventory != null) {
       if (parsedCost == null || parsedCost < 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Harga modal tidak valid.')),
+          const SnackBar(content: Text('Invalid cost price.')),
         );
         return;
       }
       if (parsedSelling == null || parsedSelling < 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Harga jual tidak valid.')),
+          const SnackBar(content: Text('Invalid selling price.')),
         );
         return;
       }
       if (parsedThreshold == null || parsedThreshold < 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Threshold tidak valid.')),
+          const SnackBar(content: Text('Invalid threshold.')),
         );
         return;
       }
@@ -158,13 +158,13 @@ class EditProductDialog {
 
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Produk berhasil diperbarui.')),
+        const SnackBar(content: Text('Product updated successfully.')),
       );
       await onUpdated();
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal update produk: $e')),
+        SnackBar(content: Text('Failed to update product: $e')),
       );
     }
   }
@@ -239,12 +239,12 @@ class _EditProductSheetState extends State<_EditProductSheet> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Pilih dari Galeri'),
+                title: const Text('Pick from Gallery'),
                 onTap: () => Navigator.of(context).pop(ImageSource.gallery),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Ambil dari Kamera'),
+                title: const Text('Take from Camera'),
                 onTap: () => Navigator.of(context).pop(ImageSource.camera),
               ),
             ],
@@ -291,7 +291,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
       setState(() {
         _isUploadingImage = false;
       });
-      _showSnack('Foto berhasil diupload.', success: true);
+      _showSnack('Photo uploaded successfully.', success: true);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -299,7 +299,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
       });
       final isLoggedIn = Supabase.instance.client.auth.currentUser != null;
       _showSnack(
-        'Upload gambar gagal. Login: ${isLoggedIn ? 'ya' : 'tidak'}. Error: $e',
+        'Image upload failed. Logged in: ${isLoggedIn ? 'yes' : 'no'}. Error: $e',
       );
     }
   }
@@ -329,7 +329,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
     }
 
     throw Exception(
-      'Semua bucket upload gagal (${_storageBuckets.join(', ')}). ${errors.join(' | ')}',
+      'All upload buckets failed (${_storageBuckets.join(', ')}). ${errors.join(' | ')}',
     );
   }
 
@@ -417,7 +417,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                                 items: [
                                   const DropdownMenuItem<int?>(
                                     value: null,
-                                    child: Text('Tanpa kategori'),
+                                    child: Text('No category'),
                                   ),
                                   ...widget.categories.map(
                                     (c) => DropdownMenuItem<int?>(
@@ -440,7 +440,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                                 items: [
                                   const DropdownMenuItem<String?>(
                                     value: null,
-                                    child: Text('Tanpa supplier'),
+                                    child: Text('No supplier'),
                                   ),
                                   ...widget.suppliers.map(
                                     (s) => DropdownMenuItem<String?>(
@@ -461,14 +461,14 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                           const SizedBox(height: 8),
                           _InputField(
                             controller: widget.barcodeController,
-                            hint: 'Scan atau ketik manual',
+                            hint: 'Scan or type manually',
                             icon: Icons.qr_code_rounded,
                           ),
                           if (widget.hasInventory) ...[
                             const SizedBox(height: 14),
                             _ResponsiveTwoColumns(
                               left: _ColumnField(
-                                label: 'Harga Modal',
+                                label: 'Cost Price',
                                 child: _InputField(
                                   controller: widget.costController,
                                   hint: '0',
@@ -480,7 +480,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                                 ),
                               ),
                               right: _ColumnField(
-                                label: 'Harga Jual',
+                                label: 'Selling Price',
                                 child: _InputField(
                                   controller: widget.sellingController,
                                   hint: '0',
@@ -493,7 +493,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                               ),
                             ),
                             const SizedBox(height: 14),
-                            _SectionLabel('Batas Stok Rendah'),
+                            _SectionLabel('Low Stock Threshold'),
                             const SizedBox(height: 8),
                             _InputField(
                               controller: widget.thresholdController,
@@ -545,7 +545,7 @@ class _TopBar extends StatelessWidget {
               onPressed: onClose,
               icon: const Icon(Icons.arrow_back_rounded),
               color: _C.inkMid,
-              tooltip: 'Kembali',
+              tooltip: 'Back',
             ),
             const Text(
               'Edit Product',
@@ -901,7 +901,7 @@ class _BottomActions extends StatelessWidget {
                   label: Text(
                     isUploadingImage
                         ? 'Uploading Image...'
-                        : (canSaveAfterImagePick ? 'Simpan Perubahan' : 'Upload gambar dulu'),
+                        : (canSaveAfterImagePick ? 'Save Changes' : 'Upload image first'),
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                   ),
                 ),
@@ -919,7 +919,7 @@ class _BottomActions extends StatelessWidget {
                     ),
                   ),
                   child: const Text(
-                    'Batal',
+                    'Cancel',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),

@@ -9,30 +9,25 @@ import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/services/inventory_service.dart';
 import 'package:inventory_app_project/services/order_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
+import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
-
-class AppColors {
-  static const primary = Color(0xFFF2C287);
-  static const terracotta = Color(0xFFE67E5D);
-  static const backgroundLight = Color(0xFFFCF9F5);
-  static const cardBg = Colors.white;
-  static const borderColor = Color(0xFFE2E8F0);
-  static const textDark = Color(0xFF0F172A);
-  static const textMedium = Color(0xFF64748B);
-  static const textLight = Color(0xFF94A3B8);
-}
+import 'package:inventory_app_project/widgets/quick_actions_section.dart';
 
 class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+  final bool showBottomNav;
+
+  const HomePage({super.key, this.showBottomNav = true});
 
   @override
   Widget build(BuildContext context) {
-    return const _HomePageContent();
+    return _HomePageContent(showBottomNav: showBottomNav);
   }
 }
 
 class _HomePageContent extends StatefulWidget {
-  const _HomePageContent();
+  final bool showBottomNav;
+
+  const _HomePageContent({required this.showBottomNav});
 
   @override
   State<_HomePageContent> createState() => _HomePageContentState();
@@ -127,27 +122,38 @@ class _HomePageContentState extends State<_HomePageContent> {
     }
   }
 
+  Future<void> _handleQuickAction(InventoryQuickAction action) async {
+    switch (action) {
+      case InventoryQuickAction.addOrder:
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const OrderPage()),
+        );
+        break;
+      case InventoryQuickAction.addItem:
+      case InventoryQuickAction.addSupplier:
+      case InventoryQuickAction.addCategory:
+      case InventoryQuickAction.stockIn:
+      case InventoryQuickAction.stockOut:
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => InventoryPage(initialQuickAction: action),
+          ),
+        );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final navBarHeight = BottomNavigation.heightFor(context);
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: AppColors.primary,
-        shape: const CircleBorder(),
-        elevation: 4,
-        child: const Icon(
-          Icons.add_rounded,
-          color: Color(0xFF292524),
-          size: 30,
-        ),
-      ),
       body: Stack(
         children: [
           CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: _buildHeader()),
-              SliverToBoxAdapter(child: _buildQuickActions()),
               SliverToBoxAdapter(child: _buildInventorySummary()),
               SliverToBoxAdapter(child: _buildStockTrend()),
               const SliverToBoxAdapter(child: SizedBox(height: 80)),
@@ -157,10 +163,16 @@ class _HomePageContentState extends State<_HomePageContent> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: BottomNavigation(
-              selectedIndex: _selectedNavIndex,
-              onNavChanged: _onBottomNavChanged,
-            ),
+            child: widget.showBottomNav
+                ? BottomNavigation(
+                    selectedIndex: _selectedNavIndex,
+                    onNavChanged: _onBottomNavChanged,
+                  )
+                : const SizedBox.shrink(),
+          ),
+          InventoryQuickActionsSection(
+            bottomOffset: navBarHeight + 12,
+            onActionSelected: _handleQuickAction,
           ),
         ],
       ),
@@ -231,10 +243,10 @@ class _HomePageContentState extends State<_HomePageContent> {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: AppColors.iconBgLight,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Icon(icon, color: const Color(0xFF475569), size: 22),
+      child: Icon(icon, color: AppColors.textSlate, size: 22),
     );
   }
 
@@ -274,13 +286,13 @@ class _HomePageContentState extends State<_HomePageContent> {
                 icon: Icons.add_box_outlined,
                 label: 'Add Item',
                 bg: AppColors.primary,
-                iconColor: const Color(0xFF292524),
+                iconColor: AppColors.textOnPrimary,
                 hasShadow: true,
               ),
               _quickAction(
                 icon: Icons.qr_code_scanner_rounded,
                 label: 'Scan',
-                bg: const Color(0xFF1E293B),
+                bg: AppColors.darkSurface,
                 iconColor: Colors.white,
                 hasShadow: true,
               ),
@@ -373,31 +385,31 @@ class _HomePageContentState extends State<_HomePageContent> {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2),
+                color: AppColors.errorBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFECACA)),
+                border: Border.all(color: AppColors.errorBorder),
               ),
               child: Row(
                 children: [
                   const Icon(
                     Icons.error_outline_rounded,
-                    color: Color(0xFFDC2626),
+                    color: AppColors.errorText,
                     size: 18,
                   ),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'Gagal memuat ringkasan. Coba lagi.',
+                      'Failed to load summary. Please try again.',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF7F1D1D),
+                        color: AppColors.errorDark,
                       ),
                     ),
                   ),
                   TextButton(
                     onPressed: _loadHomeSummary,
-                    child: const Text('Muat Ulang'),
+                    child: const Text('Reload'),
                   ),
                 ],
               ),
@@ -420,13 +432,13 @@ class _HomePageContentState extends State<_HomePageContent> {
                   Expanded(
                     child: _summaryCard(
                       icon: Icons.warning_amber_rounded,
-                      iconBg: const Color(0xFFFFF7ED),
-                      iconColor: const Color(0xFFF97316),
+                      iconBg: AppColors.accentOrangeBg,
+                      iconColor: AppColors.accentOrangeText,
                       value: lowStockItems.toString(),
-                      valueColor: const Color(0xFFF97316),
+                      valueColor: AppColors.accentOrangeText,
                       label: 'Low Stock Items',
-                      borderColor: const Color(0xFFFFEDD5),
-                      cardBg: const Color(0xFFFFF7ED),
+                      borderColor: AppColors.accentOrangeBorder,
+                      cardBg: AppColors.accentOrangeBg,
                       isLoading: _isLoadingSummary,
                     ),
                   ),
