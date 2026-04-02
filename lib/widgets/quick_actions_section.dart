@@ -40,6 +40,7 @@ class InventoryQuickActionsSection extends StatelessWidget {
 	Future<void> _showQuickActions(BuildContext context) async {
 		final action = await showModalBottomSheet<InventoryQuickAction>(
 			context: context,
+			useRootNavigator: true,
 			useSafeArea: true,
 			backgroundColor: Colors.white,
 			shape: const RoundedRectangleBorder(
@@ -83,7 +84,10 @@ class InventoryQuickActionsSection extends StatelessWidget {
 			},
 		);
 
-		if (action == null) return;
-		await onActionSelected(action);
+		if (action == null || !context.mounted) return;
+
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			onActionSelected(action);
+		});
 	}
 }

@@ -3,19 +3,26 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:inventory_app_project/models/category_model.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
+import 'package:inventory_app_project/services/category_service.dart';
 import 'package:inventory_app_project/services/inventory_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 
+class AddProductDialogResult {
+  final bool created;
+  final String? message;
+
+  const AddProductDialogResult({required this.created, this.message});
+}
+
 class AddProductDialog {
   static const int _defaultStoreId = 1;
 
-  static Future<bool> show(
+  static Future<AddProductDialogResult> show(
     BuildContext context, {
     required Map<int, CategoryModel> categoriesById,
-    required VoidCallback onProductAdded,
   }) async {
     final nameController = TextEditingController();
     final barcodeController = TextEditingController();
@@ -27,13 +34,20 @@ class AddProductDialog {
 
     int? selectedCategoryId;
     String? selectedSupplierId;
+    final categoryService = CategoryService();
     final supplierService = SupplierService();
     final productService = ProductService();
     final inventoryService = InventoryService();
     final stockMovementService = StockMovementService();
 
-    final categories = categoriesById.values.toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    List<CategoryModel> categories = const [];
+    try {
+      categories = await categoryService.getCategoriesByStoreId(_defaultStoreId);
+    } catch (e) {
+      debugPrint('Failed to fetch latest categories for create form: $e');
+      categories = categoriesById.values.toList();
+    }
+    categories.sort((a, b) => a.name.compareTo(b.name));
 
     List<SupplierModel> suppliers = const [];
     try {
@@ -42,7 +56,9 @@ class AddProductDialog {
       debugPrint('Failed to fetch suppliers for create form: $e');
     }
 
-    if (!context.mounted) return false;
+    if (!context.mounted) {
+      return const AddProductDialogResult(created: false);
+    }
 
     final shouldCreate = await showModalBottomSheet<bool>(
           context: context,
@@ -81,12 +97,13 @@ class AddProductDialog {
     stockController.dispose();
     thresholdController.dispose();
 
-    if (!context.mounted || !shouldCreate) return false;
+    if (!context.mounted || !shouldCreate) {
+      return const AddProductDialogResult(created: false);
+    }
 
     final nameError = productService.validateProductName(name);
     if (nameError != null) {
-      _snack(context, nameError);
-      return false;
+      return AddProductDialogResult(created: false, message: nameError);
     }
 
     final inventoryError = inventoryService.validateInventoryCreateInput(
@@ -96,8 +113,17 @@ class AddProductDialog {
       threshold: threshold,
     );
     if (inventoryError != null) {
-      _snack(context, inventoryError);
-      return false;
+      return AddProductDialogResult(created: false, message: inventoryError);
+    }
+
+    if (selectedCategoryId != null) {
+      final validCategory = categories.any((c) => c.id == selectedCategoryId);
+      if (!validCategory) {
+        return const AddProductDialogResult(
+          created: false,
+          message: 'Selected category is no longer available. Please choose another category.',
+        );
+      }
     }
 
     try {
@@ -116,37 +142,32 @@ class AddProductDialog {
         stockMovementService: stockMovementService,
       );
 
-      if (!context.mounted) return false;
-      _snack(context, 'Item added to warehouse successfully.', success: true);
-      onProductAdded();
-      return true;
+      if (!context.mounted) {
+        return const AddProductDialogResult(created: false);
+      }
+      return const AddProductDialogResult(
+        created: true,
+        message: 'Item added to warehouse successfully.',
+      );
     } catch (e) {
-      if (!context.mounted) return false;
-      _snack(context, 'Failed to add item: $e');
-      return false;
-    }
-  }
+      if (!context.mounted) {
+        return const AddProductDialogResult(created: false);
+      }
 
-  static void _snack(BuildContext context, String msg, {bool success = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              success ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
-              color: Colors.white,
-              size: 18,
-            ),
-            const SizedBox(width: 10),
-            Expanded(child: Text(msg)),
-          ],
-        ),
-        backgroundColor: success ? const Color(0xFF16A34A) : AppColors.errorText,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      ),
-    );
+      final errorText = e.toString();
+      if (errorText.contains('products_category_id_fkey') ||
+          errorText.contains('foreign key constraint')) {
+        return const AddProductDialogResult(
+          created: false,
+          message: 'Category is invalid or has been deleted. Please select a valid category.',
+        );
+      }
+
+      return AddProductDialogResult(
+        created: false,
+        message: 'Failed to add item: $errorText',
+      );
+    }
   }
 }
 

@@ -24,13 +24,13 @@ class OrderModel {
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) => OrderModel(
-    id: json["id"],
-    productId: json["product_id"],
-    totalPrice: json["total_price"],
-    totalItem: json["total_item"],
-    status: json["status"],
-    unitType: json["unit_type"],
-    storeId: json["store_id"],
+    id: _asString(json["id"]),
+    productId: _asString(json["product_id"]),
+    totalPrice: _asInt(json["total_price"]),
+    totalItem: _asInt(json["total_item"]),
+    status: _asString(json["status"]),
+    unitType: _asString(json["unit_type"]),
+    storeId: _asInt(json["store_id"]),
   );
 
   Map<String, dynamic> toJson() => {
@@ -42,4 +42,16 @@ class OrderModel {
     "unit_type": unitType,
     "store_id": storeId,
   };
+
+  static String _asString(dynamic value) {
+    if (value == null) return '';
+    return value.toString();
+  }
+
+  static int _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
 }
