@@ -79,59 +79,61 @@ class _InventoryPageState extends State<InventoryPage> {
       _error = null;
     });
 
+    final errors = <String>[];
+    List<ProductModel> products = const [];
+    List<InventoryModel> inventories = const [];
+    List<CategoryModel> categories = const [];
+
     try {
-      final result = await Future.wait([
-        _productService.getProductsByStoreId(_defaultStoreId),
-        _inventoryService.getInventoriesByStoreId(_defaultStoreId),
-      ]);
-
-      if (!mounted) return;
-
-      final products = result[0] as List<ProductModel>;
-      final inventories = result[1] as List<InventoryModel>;
-
-      List<CategoryModel> categories = const [];
-      try {
-        categories = await _categoryService.getCategoriesByStoreId(_defaultStoreId);
-      } catch (e) {
-        debugPrint('Failed to fetch categories: $e');
-      }
-      final inventoryByProductId = <String, InventoryModel>{
-        for (final inventory in inventories) inventory.productId: inventory,
-      };
-      final categoriesById = <int, CategoryModel>{
-        for (final category in categories) category.id: category,
-      };
-
-      final items = products
-          .map((product) => _InventoryItem(
-                product: product,
-                inventory: inventoryByProductId[product.id],
-              ))
-          .toList();
-
-      setState(() {
-        _items = items;
-        _categoriesById = categoriesById;
-        if (_selectedFilter != 'All Categories' &&
-            !_filters.contains(_selectedFilter)) {
-          _selectedFilter = 'All Categories';
-        }
-        _isLoading = false;
-      });
-
-      if (!_didRunInitialQuickAction && widget.initialQuickAction != null) {
-        _didRunInitialQuickAction = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          if (!mounted) return;
-          await _handleQuickAction(widget.initialQuickAction!);
-        });
-      }
+      products = await _productService.getProductsByStoreId(_defaultStoreId);
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
+      errors.add('products: $e');
+    }
+
+    try {
+      inventories = await _inventoryService.getInventoriesByStoreId(_defaultStoreId);
+    } catch (e) {
+      errors.add('inventories: $e');
+    }
+
+    try {
+      categories = await _categoryService.getCategoriesByStoreId(_defaultStoreId);
+    } catch (e) {
+      errors.add('categories: $e');
+      debugPrint('Failed to fetch categories: $e');
+    }
+
+    if (!mounted) return;
+
+    final inventoryByProductId = <String, InventoryModel>{
+      for (final inventory in inventories) inventory.productId: inventory,
+    };
+    final categoriesById = <int, CategoryModel>{
+      for (final category in categories) category.id: category,
+    };
+
+    final items = products
+        .map((product) => _InventoryItem(
+              product: product,
+              inventory: inventoryByProductId[product.id],
+            ))
+        .toList();
+
+    setState(() {
+      _items = items;
+      _categoriesById = categoriesById;
+      _error = errors.isEmpty ? null : errors.first;
+      if (_selectedFilter != 'All Categories' && !_filters.contains(_selectedFilter)) {
+        _selectedFilter = 'All Categories';
+      }
+      _isLoading = false;
+    });
+
+    if (!_didRunInitialQuickAction && widget.initialQuickAction != null) {
+      _didRunInitialQuickAction = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _handleQuickAction(widget.initialQuickAction!);
       });
     }
   }
@@ -186,10 +188,26 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Future<void> _addItemToWarehouse() async {
-    await AddProductDialog.show(
+    final result = await AddProductDialog.show(
       context,
       categoriesById: _categoriesById,
-      onProductAdded: _loadInventory,
+    );
+    if (!mounted) return;
+
+    if (!result.created) {
+      if (result.message != null && result.message!.trim().isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message!)),
+        );
+      }
+      return;
+    }
+
+    await _loadInventory();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message ?? 'Item added to warehouse successfully.')),
     );
   }
 
@@ -314,6 +332,10 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Future<void> _handleQuickAction(InventoryQuickAction action) async {
+    // Let the previous modal route fully settle before showing another route/dialog.
+    await WidgetsBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+
     switch (action) {
       case InventoryQuickAction.addItem:
         await _addItemToWarehouse();
@@ -679,6 +701,16 @@ class _InventoryPageState extends State<InventoryPage> {
                 'Failed to load inventory data',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
+              if (_error != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  _error!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: AppColors.errorDark),
+                  textAlign: TextAlign.center,
+                ),
+              ],
               const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: _loadInventory,

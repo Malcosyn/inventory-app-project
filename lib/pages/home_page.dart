@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/order_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
+import 'package:inventory_app_project/pages/categories/category_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
 import 'package:inventory_app_project/pages/order_page.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
+import 'package:inventory_app_project/pages/suppliers/suppliers_page.dart';
 import 'package:inventory_app_project/services/inventory_service.dart';
 import 'package:inventory_app_project/services/order_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
@@ -97,29 +99,38 @@ class _HomePageContentState extends State<_HomePageContent> {
       _summaryError = null;
     });
 
+    final errors = <String>[];
+    List<ProductModel> products = const [];
+    List<InventoryModel> inventories = const [];
+    List<OrderModel> orders = const [];
+
     try {
-      final results = await Future.wait([
-        _productService.getProductsByStoreId(_defaultStoreId),
-        _inventoryService.getInventoriesByStoreId(_defaultStoreId),
-        _orderService.getOrdersByStoreId(_defaultStoreId),
-      ]);
-
-      if (!mounted) return;
-
-      setState(() {
-        _products = results[0] as List<ProductModel>;
-        _inventories = results[1] as List<InventoryModel>;
-        _orders = results[2] as List<OrderModel>;
-        _isLoadingSummary = false;
-      });
+      products = await _productService.getProductsByStoreId(_defaultStoreId);
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _summaryError = e.toString();
-        _isLoadingSummary = false;
-      });
+      errors.add('products: $e');
     }
+
+    try {
+      inventories = await _inventoryService.getInventoriesByStoreId(_defaultStoreId);
+    } catch (e) {
+      errors.add('inventories: $e');
+    }
+
+    try {
+      orders = await _orderService.getOrdersByStoreId(_defaultStoreId);
+    } catch (e) {
+      errors.add('orders: $e');
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _products = products;
+      _inventories = inventories;
+      _orders = orders;
+      _summaryError = errors.isEmpty ? null : errors.first;
+      _isLoadingSummary = false;
+    });
   }
 
   Future<void> _handleQuickAction(InventoryQuickAction action) async {
@@ -154,6 +165,7 @@ class _HomePageContentState extends State<_HomePageContent> {
           CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: _buildHeader()),
+              SliverToBoxAdapter(child: _buildQuickAccessNav()),
               SliverToBoxAdapter(child: _buildInventorySummary()),
               SliverToBoxAdapter(child: _buildStockTrend()),
               const SliverToBoxAdapter(child: SizedBox(height: 80)),
@@ -238,6 +250,134 @@ class _HomePageContentState extends State<_HomePageContent> {
     );
   }
 
+  Widget _buildQuickAccessNav() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle('Quick Actions'),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 16,
+            children: [
+              _quickActionButton(
+                icon: Icons.add_box_outlined,
+                label: 'Add Item',
+                bg: AppColors.primary,
+                iconColor: AppColors.textOnPrimary,
+                hasShadow: true,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => InventoryPage(initialQuickAction: InventoryQuickAction.addItem),
+                    ),
+                  );
+                },
+              ),
+              _quickActionButton(
+                icon: Icons.qr_code_scanner_rounded,
+                label: 'Scan',
+                bg: AppColors.darkSurface,
+                iconColor: Colors.white,
+                hasShadow: true,
+                onTap: () {},
+              ),
+              _quickActionButton(
+                icon: Icons.person_add_outlined,
+                label: 'Supplier',
+                bg: Colors.white,
+                iconColor: AppColors.textDark,
+                hasBorder: true,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SuppliersPage(),
+                    ),
+                  );
+                },
+              ),
+              _quickActionButton(
+                icon: Icons.category_outlined,
+                label: 'Category',
+                bg: Colors.white,
+                iconColor: AppColors.textDark,
+                hasBorder: true,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CategoryPage(),
+                    ),
+                  );
+                },
+              ),
+              _quickActionButton(
+                icon: Icons.receipt_long_outlined,
+                label: 'Order',
+                bg: Colors.white,
+                iconColor: AppColors.textDark,
+                hasBorder: true,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const OrderPage()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickActionButton({
+    required IconData icon,
+    required String label,
+    required Color bg,
+    required Color iconColor,
+    bool hasShadow = false,
+    bool hasBorder = false,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(14),
+              border: hasBorder ? Border.all(color: AppColors.borderColor) : null,
+              boxShadow: hasShadow
+                  ? [
+                      BoxShadow(
+                        color: bg.withValues(alpha: 0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Icon(icon, color: iconColor, size: 26),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _headerIconBtn(IconData icon) {
     return Container(
       width: 40,
@@ -271,100 +411,6 @@ class _HomePageContentState extends State<_HomePageContent> {
     );
   }
 
-  Widget _buildQuickActions() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle('Quick Actions'),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _quickAction(
-                icon: Icons.add_box_outlined,
-                label: 'Add Item',
-                bg: AppColors.primary,
-                iconColor: AppColors.textOnPrimary,
-                hasShadow: true,
-              ),
-              _quickAction(
-                icon: Icons.qr_code_scanner_rounded,
-                label: 'Scan',
-                bg: AppColors.darkSurface,
-                iconColor: Colors.white,
-                hasShadow: true,
-              ),
-              _quickAction(
-                icon: Icons.login_rounded,
-                label: 'Stock In',
-                bg: Colors.white,
-                iconColor: AppColors.textDark,
-                hasBorder: true,
-              ),
-              _quickAction(
-                icon: Icons.logout_rounded,
-                label: 'Stock Out',
-                bg: Colors.white,
-                iconColor: AppColors.textDark,
-                hasBorder: true,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _quickAction({
-    required IconData icon,
-    required String label,
-    required Color bg,
-    required Color iconColor,
-    bool hasShadow = false,
-    bool hasBorder = false,
-  }) {
-    return GestureDetector(
-      onTap: () {},
-      child: Column(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(14),
-              border: hasBorder
-                  ? Border.all(color: AppColors.borderColor)
-                  : null,
-              boxShadow: hasShadow
-                  ? [
-                      BoxShadow(
-                        color: bg.withValues(alpha: 0.35),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Icon(icon, color: iconColor, size: 26),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textMedium,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildInventorySummary() {
     final totalProducts = _products.length;
     final lowStockItems = _inventories
@@ -389,27 +435,42 @@ class _HomePageContentState extends State<_HomePageContent> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.errorBorder),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.error_outline_rounded,
-                    color: AppColors.errorText,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Failed to load summary. Please try again.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.errorDark,
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        color: AppColors.errorText,
+                        size: 18,
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Failed to load summary. Please try again.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.errorDark,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _loadHomeSummary,
+                        child: const Text('Reload'),
+                      ),
+                    ],
                   ),
-                  TextButton(
-                    onPressed: _loadHomeSummary,
-                    child: const Text('Reload'),
+                  const SizedBox(height: 8),
+                  Text(
+                    _summaryError!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.errorDark,
+                    ),
                   ),
                 ],
               ),
