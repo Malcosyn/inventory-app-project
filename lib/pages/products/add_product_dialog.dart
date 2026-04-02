@@ -7,20 +7,7 @@ import 'package:inventory_app_project/services/inventory_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-class _C {
-  static const bg = Color(0xFFFCF9F5);
-  static const surface = Color(0xFFFFFFFF);
-  static const border = Color(0xFFD5C2AB);
-  static const inputBg = Color(0xFFF7F3EF);
-  static const ink = Color(0xFF1A1612);
-  static const inkMid = Color(0xFF4D4639);
-  static const inkLight = Color(0xFF85735E);
-  static const primary = Color(0xFFD9A05B);
-  static const success = Color(0xFF16A34A);
-  static const danger = Color(0xFFBA1A1A);
-}
+import 'package:inventory_app_project/theme/app_theme.dart';
 
 class AddProductDialog {
   static const int _defaultStoreId = 1;
@@ -40,13 +27,17 @@ class AddProductDialog {
 
     int? selectedCategoryId;
     String? selectedSupplierId;
+    final supplierService = SupplierService();
+    final productService = ProductService();
+    final inventoryService = InventoryService();
+    final stockMovementService = StockMovementService();
 
     final categories = categoriesById.values.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
     List<SupplierModel> suppliers = const [];
     try {
-      suppliers = await SupplierService().getSuppliersByStoreId(_defaultStoreId);
+      suppliers = await supplierService.getSuppliersByStoreId(_defaultStoreId);
     } catch (e) {
       debugPrint('Failed to fetch suppliers for create form: $e');
     }
@@ -92,61 +83,46 @@ class AddProductDialog {
 
     if (!context.mounted || !shouldCreate) return false;
 
-    if (name.isEmpty) {
-      _snack(context, 'Nama produk wajib diisi.');
+    final nameError = productService.validateProductName(name);
+    if (nameError != null) {
+      _snack(context, nameError);
       return false;
     }
 
-    if (costPrice == null ||
-        sellingPrice == null ||
-        initialStock == null ||
-        threshold == null) {
-      _snack(context, 'Field angka wajib diisi dengan benar.');
-      return false;
-    }
-
-    if (costPrice < 0 || sellingPrice < 0 || initialStock < 0 || threshold < 0) {
-      _snack(context, 'Nilai angka tidak boleh negatif.');
+    final inventoryError = inventoryService.validateInventoryCreateInput(
+      costPrice: costPrice,
+      sellingPrice: sellingPrice,
+      initialStock: initialStock,
+      threshold: threshold,
+    );
+    if (inventoryError != null) {
+      _snack(context, inventoryError);
       return false;
     }
 
     try {
-      final productId = await ProductService().createProductEntry(
+      await productService.createProductWithInventory(
         storeId: _defaultStoreId,
         name: name,
+        costPrice: costPrice!,
+        sellingPrice: sellingPrice!,
+        initialStock: initialStock!,
+        threshold: threshold!,
         categoryId: selectedCategoryId,
         supplierId: selectedSupplierId,
         imageUrl: imageUrl.isEmpty ? null : imageUrl,
         barcode: barcode.isEmpty ? null : barcode,
+        inventoryService: inventoryService,
+        stockMovementService: stockMovementService,
       );
-
-      await InventoryService().createInventoryEntry(
-        productId: productId,
-        costPrice: costPrice,
-        sellingPrice: sellingPrice,
-        stockQuantity: initialStock,
-        lowStockThreshold: threshold,
-        storeId: _defaultStoreId,
-      );
-
-      if (initialStock > 0) {
-        await StockMovementService().createStockMovementEntry(
-          productId: productId,
-          type: 'IN',
-          quantity: initialStock,
-          stockAfter: initialStock,
-          note: 'Initial stock saat tambah item',
-          storeId: _defaultStoreId,
-        );
-      }
 
       if (!context.mounted) return false;
-      _snack(context, 'Item berhasil ditambahkan ke gudang.', success: true);
+      _snack(context, 'Item added to warehouse successfully.', success: true);
       onProductAdded();
       return true;
     } catch (e) {
       if (!context.mounted) return false;
-      _snack(context, 'Gagal menambah item: $e');
+      _snack(context, 'Failed to add item: $e');
       return false;
     }
   }
@@ -165,7 +141,7 @@ class AddProductDialog {
             Expanded(child: Text(msg)),
           ],
         ),
-        backgroundColor: success ? _C.success : _C.danger,
+        backgroundColor: success ? const Color(0xFF16A34A) : AppColors.errorText,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -206,15 +182,8 @@ class _AddProductSheet extends StatefulWidget {
 }
 
 class _AddProductSheetState extends State<_AddProductSheet> {
-  static const List<String> _storageBuckets = <String>[
-    'PRODUCT-IMAGES',
-    'product-images',
-    'PRODUCT_BUCK',
-    'product_buck',
-    'products',
-  ];
-
   final ImagePicker _imagePicker = ImagePicker();
+  final ProductService _productService = ProductService();
 
   int? _categoryId;
   String? _supplierId;
@@ -232,12 +201,12 @@ class _AddProductSheetState extends State<_AddProductSheet> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Pilih dari Galeri'),
+                title: const Text('Pick from Gallery'),
                 onTap: () => Navigator.of(context).pop(ImageSource.gallery),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Ambil dari Kamera'),
+                title: const Text('Take from Camera'),
                 onTap: () => Navigator.of(context).pop(ImageSource.camera),
               ),
             ],
@@ -261,10 +230,6 @@ class _AddProductSheetState extends State<_AddProductSheet> {
       if (file == null || !mounted) return;
 
       final bytes = await file.readAsBytes();
-      final ext = _resolveExtension(file.name);
-      final fileName =
-          'product_${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond}.$ext';
-      final storagePath = 'uploads/$fileName';
 
       setState(() {
         _hasSelectedImage = true;
@@ -273,10 +238,9 @@ class _AddProductSheetState extends State<_AddProductSheet> {
       });
 
       widget.imageUrlController.clear();
-      final publicUrl = await _uploadWithFallback(
-        storagePath: storagePath,
+      final publicUrl = await _productService.uploadProductImage(
         bytes: bytes,
-        ext: ext,
+        originalName: file.name,
       );
 
       if (!mounted) return;
@@ -284,68 +248,13 @@ class _AddProductSheetState extends State<_AddProductSheet> {
       setState(() {
         _isUploadingImage = false;
       });
-      _showSnack('Foto berhasil diupload.', success: true);
+      _showSnack('Photo uploaded successfully.', success: true);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isUploadingImage = false;
       });
-      final isLoggedIn = Supabase.instance.client.auth.currentUser != null;
-      _showSnack(
-        'Upload gambar gagal. Login: ${isLoggedIn ? 'ya' : 'tidak'}. Error: $e',
-      );
-    }
-  }
-
-  Future<String> _uploadWithFallback({
-    required String storagePath,
-    required Uint8List bytes,
-    required String ext,
-  }) async {
-    final errors = <String>[];
-
-    for (final bucket in _storageBuckets) {
-      try {
-        final storage = Supabase.instance.client.storage.from(bucket);
-        await storage.uploadBinary(
-          storagePath,
-          bytes,
-          fileOptions: FileOptions(
-            upsert: true,
-            contentType: _contentTypeFor(ext),
-          ),
-        );
-        return storage.getPublicUrl(storagePath);
-      } catch (e) {
-        errors.add('$bucket: $e');
-      }
-    }
-
-    throw Exception(
-      'Semua bucket upload gagal (${_storageBuckets.join(', ')}). ${errors.join(' | ')}',
-    );
-  }
-
-  String _resolveExtension(String name) {
-    final parts = name.split('.');
-    if (parts.length < 2) return 'jpg';
-    final ext = parts.last.toLowerCase();
-    if (ext == 'jpg' || ext == 'jpeg' || ext == 'png' || ext == 'webp') {
-      return ext;
-    }
-    return 'jpg';
-  }
-
-  String _contentTypeFor(String ext) {
-    switch (ext) {
-      case 'png':
-        return 'image/png';
-      case 'webp':
-        return 'image/webp';
-      case 'jpg':
-      case 'jpeg':
-      default:
-        return 'image/jpeg';
+      _showSnack('Image upload failed: $e');
     }
   }
 
@@ -353,7 +262,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: success ? _C.success : _C.danger,
+        backgroundColor: success ? const Color(0xFF16A34A) : AppColors.errorText,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -370,7 +279,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         child: Material(
-          color: _C.bg,
+          color: AppColors.backgroundLight,
           child: Column(
             children: [
               _TopBar(onClose: () => Navigator.of(context).pop(false)),
@@ -408,7 +317,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                                 items: [
                                   const DropdownMenuItem<int?>(
                                     value: null,
-                                    child: Text('Tanpa kategori'),
+                                    child: Text('No category'),
                                   ),
                                   ...widget.categories.map(
                                     (c) => DropdownMenuItem<int?>(
@@ -431,7 +340,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                                 items: [
                                   const DropdownMenuItem<String?>(
                                     value: null,
-                                    child: Text('Tanpa supplier'),
+                                    child: Text('No supplier'),
                                   ),
                                   ...widget.suppliers.map(
                                     (s) => DropdownMenuItem<String?>(
@@ -452,13 +361,13 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                           const SizedBox(height: 8),
                           _InputField(
                             controller: widget.barcodeController,
-                            hint: 'Scan atau ketik manual',
+                            hint: 'Scan or type manually',
                             icon: Icons.qr_code_rounded,
                           ),
                           const SizedBox(height: 14),
                           _ResponsiveTwoColumns(
                             left: _ColumnField(
-                              label: 'Harga Modal',
+                              label: 'Cost Price',
                               child: _InputField(
                                 controller: widget.costPriceController,
                                 hint: '0',
@@ -472,7 +381,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                               ),
                             ),
                             right: _ColumnField(
-                              label: 'Harga Jual',
+                              label: 'Selling Price',
                               child: _InputField(
                                 controller: widget.sellingPriceController,
                                 hint: '0',
@@ -489,7 +398,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                           const SizedBox(height: 14),
                           _ResponsiveTwoColumns(
                             left: _ColumnField(
-                              label: 'Stok Awal',
+                              label: 'Initial Stock',
                               child: _InputField(
                                 controller: widget.stockController,
                                 hint: '0',
@@ -503,7 +412,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                               ),
                             ),
                             right: _ColumnField(
-                              label: 'Batas Stok Rendah',
+                              label: 'Low Stock Threshold',
                               child: _InputField(
                                 controller: widget.thresholdController,
                                 hint: '5',
@@ -546,7 +455,7 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _C.bg,
+      color: AppColors.backgroundLight,
       elevation: 1,
       shadowColor: Colors.black12,
       child: Padding(
@@ -556,22 +465,22 @@ class _TopBar extends StatelessWidget {
             IconButton(
               onPressed: onClose,
               icon: const Icon(Icons.arrow_back_rounded),
-              color: _C.inkMid,
-              tooltip: 'Kembali',
+              color: AppColors.textMedium,
+              tooltip: 'Back',
             ),
             const Text(
               'Add New Item',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
-                color: _C.ink,
+                color: AppColors.textDark,
                 letterSpacing: -0.2,
               ),
             ),
             const Spacer(),
             const Icon(
               Icons.inventory_2_outlined,
-              color: _C.primary,
+              color: AppColors.primary,
               size: 24,
             ),
           ],
@@ -602,9 +511,9 @@ class _ImageHero extends StatelessWidget {
       child: Container(
         height: 220,
         decoration: BoxDecoration(
-          color: _C.inputBg,
+          color: AppColors.backgroundAlt,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _C.border),
+          border: Border.all(color: AppColors.borderColor),
         ),
         child: Stack(
           fit: StackFit.expand,
@@ -641,7 +550,7 @@ class _ImageHero extends StatelessWidget {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: _C.surface,
+                    color: AppColors.cardBg,
                     borderRadius: BorderRadius.circular(99),
                     boxShadow: const [
                       BoxShadow(
@@ -656,7 +565,7 @@ class _ImageHero extends StatelessWidget {
                           padding: EdgeInsets.all(14),
                           child: CircularProgressIndicator(strokeWidth: 2.2),
                         )
-                      : const Icon(Icons.add_a_photo_outlined, color: _C.primary),
+                      : const Icon(Icons.add_a_photo_outlined, color: AppColors.primary),
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -664,13 +573,13 @@ class _ImageHero extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: _C.inkMid,
+                    color: AppColors.textMedium,
                   ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
                   'PNG, JPG up to 10MB',
-                  style: TextStyle(fontSize: 12, color: _C.inkLight),
+                  style: TextStyle(fontSize: 12, color: AppColors.textLight),
                 ),
               ],
             ),
@@ -693,7 +602,7 @@ class _SectionLabel extends StatelessWidget {
       style: const TextStyle(
         fontSize: 11,
         letterSpacing: 1.2,
-        color: _C.inkMid,
+        color: AppColors.textMedium,
         fontWeight: FontWeight.w800,
       ),
     );
@@ -783,35 +692,35 @@ class _InputField extends StatelessWidget {
       style: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: _C.ink,
+        color: AppColors.textDark,
       ),
       decoration: InputDecoration(
         filled: true,
-        fillColor: _C.inputBg,
+        fillColor: AppColors.backgroundAlt,
         hintText: required ? '$hint *' : hint,
         hintStyle: const TextStyle(
-          color: _C.inkLight,
+          color: AppColors.textLight,
           fontWeight: FontWeight.w500,
         ),
-        prefixIcon: Icon(icon, size: 20, color: _C.inkLight),
+        prefixIcon: Icon(icon, size: 20, color: AppColors.textLight),
         prefixText: prefixText,
         prefixStyle: const TextStyle(
-          color: _C.inkMid,
+          color: AppColors.textMedium,
           fontWeight: FontWeight.w700,
         ),
         suffixText: suffixText,
         suffixStyle: const TextStyle(
-          color: _C.inkLight,
+          color: AppColors.textLight,
           fontWeight: FontWeight.w600,
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0x20000000)),
+          borderSide: const BorderSide(color: AppColors.borderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: _C.primary, width: 1.6),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
         ),
       ),
     );
@@ -837,29 +746,29 @@ class _SelectField<T> extends StatelessWidget {
       initialValue: initialValue,
       items: items,
       onChanged: onChanged,
-      icon: const Icon(Icons.expand_more_rounded, color: _C.inkLight),
+      icon: const Icon(Icons.expand_more_rounded, color: AppColors.textLight),
       style: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: _C.ink,
+        color: AppColors.textDark,
       ),
-      dropdownColor: _C.surface,
+      dropdownColor: AppColors.cardBg,
       decoration: InputDecoration(
         filled: true,
-        fillColor: _C.inputBg,
+        fillColor: AppColors.backgroundAlt,
         hintText: hint,
         hintStyle: const TextStyle(
-          color: _C.inkLight,
+          color: AppColors.textLight,
           fontWeight: FontWeight.w500,
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0x20000000)),
+          borderSide: const BorderSide(color: AppColors.borderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: _C.primary, width: 1.6),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
         ),
       ),
     );
@@ -884,8 +793,8 @@ class _BottomActions extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: const BoxDecoration(
-        color: _C.surface,
-        border: Border(top: BorderSide(color: Color(0x14000000))),
+        color: AppColors.cardBg,
+        border: Border(top: BorderSide(color: AppColors.borderLight)),
       ),
       child: Center(
         child: ConstrainedBox(
@@ -898,7 +807,7 @@ class _BottomActions extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: (isUploadingImage || !canSaveAfterImagePick) ? null : onSave,
                   style: FilledButton.styleFrom(
-                    backgroundColor: _C.primary,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -913,7 +822,7 @@ class _BottomActions extends StatelessWidget {
                   label: Text(
                     isUploadingImage
                         ? 'Uploading Image...'
-                        : (canSaveAfterImagePick ? 'Save Item' : 'Upload gambar dulu'),
+                        : (canSaveAfterImagePick ? 'Save Item' : 'Upload image first'),
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                   ),
                 ),
@@ -924,8 +833,8 @@ class _BottomActions extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: onCancel,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: _C.inkMid,
-                    side: const BorderSide(color: _C.border),
+                    foregroundColor: AppColors.textMedium,
+                    side: const BorderSide(color: AppColors.borderColor),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),

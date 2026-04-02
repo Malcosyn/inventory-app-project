@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/pages/login_page.dart';
 import 'package:inventory_app_project/secrets/supabase_secret.dart';
+import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
@@ -18,8 +19,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
+      title: 'Inventory App',
+      theme: AppTheme.light(),
       home: LoginPage(),
     );
   }

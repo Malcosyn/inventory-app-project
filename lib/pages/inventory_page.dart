@@ -4,6 +4,7 @@ import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
+import 'package:inventory_app_project/pages/categories/add_category_dialog.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/order_page.dart';
 import 'package:inventory_app_project/pages/products/add_product_dialog.dart';
@@ -11,16 +12,26 @@ import 'package:inventory_app_project/pages/products/edit_product_dialog.dart';
 import 'package:inventory_app_project/pages/products/product_detail.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
+import 'package:inventory_app_project/pages/stock_movements/add_stock_movement_dialog.dart';
+import 'package:inventory_app_project/pages/suppliers/add_supplier_dialog.dart';
 import 'package:inventory_app_project/services/category_service.dart';
 import 'package:inventory_app_project/services/inventory_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
-import 'package:inventory_app_project/usecases/products/product_image_url_usecase.dart';
+import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
+import 'package:inventory_app_project/widgets/quick_actions_section.dart';
 
 class InventoryPage extends StatefulWidget {
-  const InventoryPage({super.key});
+  final bool showBottomNav;
+  final InventoryQuickAction? initialQuickAction;
+
+  const InventoryPage({
+    super.key,
+    this.showBottomNav = true,
+    this.initialQuickAction,
+  });
 
   @override
   State<InventoryPage> createState() => _InventoryPageState();
@@ -34,7 +45,7 @@ class _InventoryPageState extends State<InventoryPage> {
   final StockMovementService _stockMovementService = StockMovementService();
   final CategoryService _categoryService = CategoryService();
   final SupplierService _supplierService = SupplierService();
-  final ProductImageUrlUseCase _imageUrlUseCase = const ProductImageUrlUseCase();
+  final ProductService _imageService = ProductService();
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
@@ -43,6 +54,7 @@ class _InventoryPageState extends State<InventoryPage> {
   Map<int, CategoryModel> _categoriesById = const {};
   String _searchQuery = '';
   String _selectedFilter = 'All Categories';
+  bool _didRunInitialQuickAction = false;
 
   List<String> get _filters {
     final names = _categoriesById.values.map((c) => c.name).toList()..sort();
@@ -78,15 +90,9 @@ class _InventoryPageState extends State<InventoryPage> {
       final products = result[0] as List<ProductModel>;
       final inventories = result[1] as List<InventoryModel>;
 
-      final categoryIds = products
-          .map((p) => p.categoryId)
-          .whereType<int>()
-          .toSet()
-          .toList();
-
       List<CategoryModel> categories = const [];
       try {
-        categories = await _categoryService.getCategoriesByIds(categoryIds);
+        categories = await _categoryService.getCategoriesByStoreId(_defaultStoreId);
       } catch (e) {
         debugPrint('Failed to fetch categories: $e');
       }
@@ -113,6 +119,14 @@ class _InventoryPageState extends State<InventoryPage> {
         }
         _isLoading = false;
       });
+
+      if (!_didRunInitialQuickAction && widget.initialQuickAction != null) {
+        _didRunInitialQuickAction = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await _handleQuickAction(widget.initialQuickAction!);
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -134,16 +148,16 @@ class _InventoryPageState extends State<InventoryPage> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Delete Product'),
-          content: Text('Hapus produk "${item.product.name}"?'),
+          content: Text('Delete product "${item.product.name}"?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Batal'),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Hapus'),
+              child: const Text('Delete'),
             ),
           ],
         );
@@ -160,13 +174,13 @@ class _InventoryPageState extends State<InventoryPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Produk berhasil dihapus.')),
+        const SnackBar(content: Text('Product deleted successfully.')),
       );
       await _loadInventory();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menghapus produk: $e')),
+        SnackBar(content: Text('Failed to delete product: $e')),
       );
     }
   }
@@ -180,39 +194,12 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Future<void> _addCategoryQuick() async {
-    final nameController = TextEditingController();
-    final created = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add Category'),
-          content: TextField(
-            controller: nameController,
-            decoration: const InputDecoration(
-              labelText: 'Category name',
-              hintText: 'Contoh: Minuman',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Simpan'),
-            ),
-          ],
-        );
-      },
-    );
+    final name = await AddCategoryDialog.show(context);
+    if (!mounted || name == null) return;
 
-    final name = nameController.text.trim();
-    nameController.dispose();
-    if (!mounted || created != true) return;
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama category wajib diisi.')),
+        const SnackBar(content: Text('Category name is required.')),
       );
       return;
     }
@@ -231,93 +218,24 @@ class _InventoryPageState extends State<InventoryPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Category berhasil ditambahkan.')),
+        const SnackBar(content: Text('Category added successfully.')),
       );
       await _loadInventory();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal tambah category: $e')),
+        SnackBar(content: Text('Failed to add category: $e')),
       );
     }
   }
 
   Future<void> _addSupplierQuick() async {
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
-    final addressController = TextEditingController();
-    final emailController = TextEditingController();
+    final input = await AddSupplierDialog.show(context);
+    if (!mounted || input == null) return;
 
-    final created = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add Supplier'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Supplier name',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: addressController,
-                  decoration: const InputDecoration(
-                    labelText: 'Address',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email (optional)',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Simpan'),
-            ),
-          ],
-        );
-      },
-    );
-
-    final name = nameController.text.trim();
-    final phone = phoneController.text.trim();
-    final address = addressController.text.trim();
-    final email = emailController.text.trim();
-
-    nameController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
-    emailController.dispose();
-
-    if (!mounted || created != true) return;
-
-    if (name.isEmpty || phone.isEmpty || address.isEmpty) {
+    if (input.name.isEmpty || input.phone.isEmpty || input.address.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama, phone, dan address wajib diisi.')),
+        const SnackBar(content: Text('Name, phone, and address are required.')),
       );
       return;
     }
@@ -325,22 +243,22 @@ class _InventoryPageState extends State<InventoryPage> {
     try {
       final supplier = SupplierModel(
         id: 'sup_${DateTime.now().microsecondsSinceEpoch}',
-        name: name,
-        phone: phone,
-        address: address,
-        email: email.isEmpty ? null : email,
+        name: input.name,
+        phone: input.phone,
+        address: input.address,
+        email: input.email,
         storeId: _defaultStoreId,
       );
       await _supplierService.createSupplier(supplier);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Supplier berhasil ditambahkan.')),
+        const SnackBar(content: Text('Supplier added successfully.')),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal tambah supplier: $e')),
+        SnackBar(content: Text('Failed to add supplier: $e')),
       );
     }
   }
@@ -348,7 +266,7 @@ class _InventoryPageState extends State<InventoryPage> {
   Future<void> _pickProductForStockChange({required bool isStockIn}) async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Belum ada produk di inventory.')),
+        const SnackBar(content: Text('No products in inventory yet.')),
       );
       return;
     }
@@ -364,7 +282,7 @@ class _InventoryPageState extends State<InventoryPage> {
               child: Row(
                 children: [
                   Text(
-                    isStockIn ? 'Pilih Produk untuk Stock In' : 'Pilih Produk untuk Stock Out',
+                    isStockIn ? 'Select Product for Stock In' : 'Select Product for Stock Out',
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                   ),
                 ],
@@ -374,7 +292,7 @@ class _InventoryPageState extends State<InventoryPage> {
             Expanded(
               child: ListView.separated(
                 itemCount: _items.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final item = _items[index];
                   return ListTile(
@@ -395,69 +313,26 @@ class _InventoryPageState extends State<InventoryPage> {
     await _changeStock(item: picked, isStockIn: isStockIn);
   }
 
-  Future<void> _showQuickActions() async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.inventory_2_outlined),
-              title: const Text('Add Item'),
-              onTap: () => Navigator.of(context).pop('add_item'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.local_shipping_outlined),
-              title: const Text('Add Supplier'),
-              onTap: () => Navigator.of(context).pop('add_supplier'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.category_outlined),
-              title: const Text('Add Category'),
-              onTap: () => Navigator.of(context).pop('add_category'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.receipt_long_outlined),
-              title: const Text('Add Order'),
-              onTap: () => Navigator.of(context).pop('add_order'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.arrow_downward_rounded),
-              title: const Text('Stock In'),
-              onTap: () => Navigator.of(context).pop('stock_in'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.arrow_upward_rounded),
-              title: const Text('Stock Out'),
-              onTap: () => Navigator.of(context).pop('stock_out'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted || action == null) return;
-
+  Future<void> _handleQuickAction(InventoryQuickAction action) async {
     switch (action) {
-      case 'add_item':
+      case InventoryQuickAction.addItem:
         await _addItemToWarehouse();
-      case 'add_supplier':
+        break;
+      case InventoryQuickAction.addSupplier:
         await _addSupplierQuick();
-      case 'add_category':
+        break;
+      case InventoryQuickAction.addCategory:
         await _addCategoryQuick();
-      case 'add_order':
+        break;
+      case InventoryQuickAction.addOrder:
         if (!mounted) return;
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrderPage()));
-      case 'stock_in':
+        break;
+      case InventoryQuickAction.stockIn:
         await _pickProductForStockChange(isStockIn: true);
-      case 'stock_out':
+        break;
+      case InventoryQuickAction.stockOut:
         await _pickProductForStockChange(isStockIn: false);
-      default:
         break;
     }
   }
@@ -481,67 +356,15 @@ class _InventoryPageState extends State<InventoryPage> {
     final inventory = item.inventory;
     if (inventory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Data inventory tidak ditemukan.')),
+        const SnackBar(content: Text('Inventory data not found.')),
       );
       return;
     }
 
-    final qtyController = TextEditingController();
-    final reasonController = TextEditingController();
-    final input = await showDialog<_StockChangeInput>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(isStockIn ? 'Stock In' : 'Stock Out'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: qtyController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Quantity',
-                    hintText: 'Masukkan jumlah',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: reasonController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Reason (optional)',
-                    hintText: 'Contoh: Retur supplier / Penjualan offline',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final parsed = int.tryParse(qtyController.text.trim());
-                if (parsed == null || parsed <= 0) return;
-                Navigator.of(context).pop(
-                  _StockChangeInput(
-                    quantity: parsed,
-                    reason: reasonController.text.trim(),
-                  ),
-                );
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
-        );
-      },
+    final input = await AddStockMovementDialog.show(
+      context,
+      isStockIn: isStockIn,
     );
-
-    qtyController.dispose();
-    reasonController.dispose();
     if (!mounted) return;
     if (input == null) return;
 
@@ -551,7 +374,7 @@ class _InventoryPageState extends State<InventoryPage> {
 
     if (newStock < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Stock tidak boleh minus.')),
+        const SnackBar(content: Text('Stock cannot be negative.')),
       );
       return;
     }
@@ -574,8 +397,9 @@ class _InventoryPageState extends State<InventoryPage> {
         type: isStockIn ? 'IN' : 'OUT',
         quantity: input.quantity,
         stockAfter: newStock,
-        note: input.reason.isNotEmpty
-            ? input.reason
+        reason: input.reason,
+        note: input.note.isNotEmpty
+          ? input.note
             : (isStockIn
                 ? 'Manual stock in from product detail'
                 : 'Manual stock out from product detail'),
@@ -586,7 +410,7 @@ class _InventoryPageState extends State<InventoryPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isStockIn ? 'Stock berhasil ditambah.' : 'Stock berhasil dikurangi.',
+            isStockIn ? 'Stock added successfully.' : 'Stock reduced successfully.',
           ),
         ),
       );
@@ -596,7 +420,7 @@ class _InventoryPageState extends State<InventoryPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal update stock: $e')),
+        SnackBar(content: Text('Failed to update stock: $e')),
       );
     }
   }
@@ -715,7 +539,7 @@ class _InventoryPageState extends State<InventoryPage> {
     _StockStatus.out     => 'Out of Stock',
   };
 
-  // ── Header (tanpa tombol tambah) ─────────────────────────────────────────
+  // ── Header (without add button) ─────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       color: const Color(0xFFFDFAF6),
@@ -852,13 +676,13 @@ class _InventoryPageState extends State<InventoryPage> {
               const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626)),
               const SizedBox(height: 8),
               const Text(
-                'Gagal memuat data inventory',
+                'Failed to load inventory data',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: _loadInventory,
-                child: const Text('Coba lagi'),
+                child: const Text('Try again'),
               ),
             ],
           ),
@@ -871,7 +695,7 @@ class _InventoryPageState extends State<InventoryPage> {
     if (visibleItems.isEmpty) {
       return const Center(
         child: Text(
-          'Tidak ada data inventory.',
+          'No inventory data.',
           style: TextStyle(color: AppColors.textMedium),
         ),
       );
@@ -898,9 +722,9 @@ class _InventoryPageState extends State<InventoryPage> {
 
         final item = visibleItems[index - 1];
         final status = item.stockStatus;
-        final imageUrl = _imageUrlUseCase.resolveImageUrl(item.product.imageUrl);
+        final imageUrl = _imageService.resolveImageUrl(item.product.imageUrl);
         final proxyUrl = imageUrl != null
-            ? _imageUrlUseCase.proxyImageUrl(imageUrl)
+          ? _imageService.proxyImageUrl(imageUrl)
             : null;
 
         return InkWell(
@@ -1041,7 +865,7 @@ class _InventoryPageState extends State<InventoryPage> {
                             color: Colors.white,
                             surfaceTintColor: Colors.white,
                             iconColor: AppColors.textMedium,
-                            tooltip: 'Opsi produk',
+                            tooltip: 'Product options',
                           ),
                         ],
                       ),
@@ -1058,9 +882,8 @@ class _InventoryPageState extends State<InventoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    // FAB bottom offset: di atas bottom nav bar (asumsi nav bar ~72dp)
-    const double navBarHeight = 72;
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    // FAB bottom offset: selalu di atas bottom nav bar
+    final navBarHeight = BottomNavigation.heightFor(context);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -1074,30 +897,21 @@ class _InventoryPageState extends State<InventoryPage> {
           ),
 
           // ── Bottom Navigation ─────────────────────────────────────────
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: BottomNavigation(
-              selectedIndex: 1,
-              onNavChanged: (index) => _onBottomNavChanged(context, index),
+          if (widget.showBottomNav)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: BottomNavigation(
+                selectedIndex: 1,
+                onNavChanged: (index) => _onBottomNavChanged(context, index),
+              ),
             ),
-          ),
 
           // ── FAB: Quick Actions (+) ───────────────────────────────────
-          Positioned(
-            right: 16,
-            bottom: navBarHeight + bottomPadding + 12,
-            child: FloatingActionButton(
-              onPressed: _showQuickActions,
-              backgroundColor: const Color(0xFFC87F2E),
-              foregroundColor: Colors.white,
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.add_rounded, size: 26),
-            ),
+          InventoryQuickActionsSection(
+            bottomOffset: navBarHeight + 12,
+            onActionSelected: _handleQuickAction,
           ),
         ],
       ),
@@ -1106,12 +920,6 @@ class _InventoryPageState extends State<InventoryPage> {
 }
 
 // ── Supporting types (unchanged) ─────────────────────────────────────────────
-
-class _StockChangeInput {
-  final int quantity;
-  final String reason;
-  const _StockChangeInput({required this.quantity, required this.reason});
-}
 
 class _InventoryItem {
   final ProductModel product;
@@ -1171,7 +979,7 @@ class _InventoryProductImageState extends State<_InventoryProductImage> {
           ),
         );
       },
-      errorBuilder: (_, error, __) {
+      errorBuilder: (context, error, stackTrace) {
         if (!_usingFallback && widget.fallbackUrl != null) {
           debugPrint(
             'Image load failed for ${widget.productName}: ${widget.primaryUrl} | $error. Trying proxy ${widget.fallbackUrl}',

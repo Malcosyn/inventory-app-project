@@ -11,6 +11,7 @@ class StockMovementService {
     required String type,
     required int quantity,
     required int stockAfter,
+    required String reason,
     required String note,
     required int storeId,
   }) async {
@@ -19,6 +20,7 @@ class StockMovementService {
       'type': type,
       'quantity': quantity,
       'stock_after': stockAfter,
+      'reason': reason,
       'note': note,
       'created_at': DateTime.now().toIso8601String(),
       'store_id': storeId,
