@@ -57,6 +57,65 @@ class InventoryService {
         .eq('id', inventory.id);
   }
 
+  String? validateInventoryUpdateInput({
+    required int? costPrice,
+    required int? sellingPrice,
+    required int? threshold,
+  }) {
+    if (costPrice == null || costPrice < 0) {
+      return 'Invalid cost price.';
+    }
+    if (sellingPrice == null || sellingPrice < 0) {
+      return 'Invalid selling price.';
+    }
+    if (threshold == null || threshold < 0) {
+      return 'Invalid threshold.';
+    }
+    return null;
+  }
+
+  String? validateInventoryCreateInput({
+    required int? costPrice,
+    required int? sellingPrice,
+    required int? initialStock,
+    required int? threshold,
+  }) {
+    if (costPrice == null ||
+        sellingPrice == null ||
+        initialStock == null ||
+        threshold == null) {
+      return 'Numeric fields are required and must be valid.';
+    }
+
+    if (costPrice < 0 || sellingPrice < 0 || initialStock < 0 || threshold < 0) {
+      return 'Numeric values cannot be negative.';
+    }
+
+    return null;
+  }
+
+  InventoryModel? buildUpdatedInventory({
+    required InventoryModel? original,
+    required int? costPrice,
+    required int? sellingPrice,
+    required int? threshold,
+  }) {
+    if (original == null) {
+      return null;
+    }
+
+    return InventoryModel(
+      id: original.id,
+      productId: original.productId,
+      costPrice: costPrice!,
+      sellingPrice: sellingPrice!,
+      stockQuantity: original.stockQuantity,
+      lowStockThreshold: threshold!,
+      updatedAt: DateTime.now(),
+      storeId: original.storeId,
+    );
+  }
+
   Future<void> deleteInventory(String id) async {
     await _client.from(_tableName).delete().eq('id', id);
   }

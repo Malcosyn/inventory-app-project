@@ -4,9 +4,8 @@ import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
+import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
-import 'package:inventory_app_project/usecases/products/product_detail_usecase.dart';
-import 'package:inventory_app_project/usecases/products/product_image_url_usecase.dart';
 
 // ─── Shared Text Styles ──────────────────────────────────────────────────────
 class _T {
@@ -86,7 +85,7 @@ class ProductDetailPage extends StatelessWidget {
   final VoidCallback? onStockIn;
   final VoidCallback? onStockOut;
   final VoidCallback? onDelete;
-  final ProductDetailUseCase _useCase = const ProductDetailUseCase();
+  ProductService get _productService => ProductService();
 
   const ProductDetailPage({
     super.key,
@@ -104,7 +103,7 @@ class ProductDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vm         = _useCase.build(product, inventory);
+    final vm         = _productService.buildDetailViewData(product, inventory);
     final stockState = _StockState.fromDomain(vm.stockState);
     final catName    = categoryNameOverride ??
         category?.name ??
@@ -235,7 +234,7 @@ class _HeroCard extends StatelessWidget {
   final String stockLabel;
   final Color stateColor;
   final Color stateBgColor;
-  final ProductImageUrlUseCase _imgUseCase = const ProductImageUrlUseCase();
+  ProductService get _productService => ProductService();
 
   const _HeroCard({
     required this.product,
@@ -248,8 +247,8 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = _imgUseCase.resolveImageUrl(product.imageUrl);
-    final proxyUrl = imageUrl != null ? _imgUseCase.proxyImageUrl(imageUrl) : null;
+    final imageUrl = _productService.resolveImageUrl(product.imageUrl);
+    final proxyUrl = imageUrl != null ? _productService.proxyImageUrl(imageUrl) : null;
 
     return Container(
       decoration: BoxDecoration(

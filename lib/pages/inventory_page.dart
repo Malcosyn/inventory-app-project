@@ -12,6 +12,7 @@ import 'package:inventory_app_project/pages/products/edit_product_dialog.dart';
 import 'package:inventory_app_project/pages/products/product_detail.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
+import 'package:inventory_app_project/pages/stock_movements/add_stock_movement_dialog.dart';
 import 'package:inventory_app_project/pages/suppliers/add_supplier_dialog.dart';
 import 'package:inventory_app_project/services/category_service.dart';
 import 'package:inventory_app_project/services/inventory_service.dart';
@@ -19,7 +20,6 @@ import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
-import 'package:inventory_app_project/usecases/products/product_image_url_usecase.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
 import 'package:inventory_app_project/widgets/quick_actions_section.dart';
 
@@ -45,7 +45,7 @@ class _InventoryPageState extends State<InventoryPage> {
   final StockMovementService _stockMovementService = StockMovementService();
   final CategoryService _categoryService = CategoryService();
   final SupplierService _supplierService = SupplierService();
-  final ProductImageUrlUseCase _imageUrlUseCase = const ProductImageUrlUseCase();
+  final ProductService _imageService = ProductService();
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
@@ -361,62 +361,10 @@ class _InventoryPageState extends State<InventoryPage> {
       return;
     }
 
-    final qtyController = TextEditingController();
-    final reasonController = TextEditingController();
-    final input = await showDialog<_StockChangeInput>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(isStockIn ? 'Stock In' : 'Stock Out'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: qtyController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Quantity',
-                    hintText: 'Enter quantity',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: reasonController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Reason (optional)',
-                    hintText: 'Example: Supplier return / Offline sale',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final parsed = int.tryParse(qtyController.text.trim());
-                if (parsed == null || parsed <= 0) return;
-                Navigator.of(context).pop(
-                  _StockChangeInput(
-                    quantity: parsed,
-                    reason: reasonController.text.trim(),
-                  ),
-                );
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+    final input = await AddStockMovementDialog.show(
+      context,
+      isStockIn: isStockIn,
     );
-
-    qtyController.dispose();
-    reasonController.dispose();
     if (!mounted) return;
     if (input == null) return;
 
@@ -449,9 +397,9 @@ class _InventoryPageState extends State<InventoryPage> {
         type: isStockIn ? 'IN' : 'OUT',
         quantity: input.quantity,
         stockAfter: newStock,
-        reason: 'ADJUSTMENT',
-        note: input.reason.isNotEmpty
-            ? input.reason
+        reason: input.reason,
+        note: input.note.isNotEmpty
+          ? input.note
             : (isStockIn
                 ? 'Manual stock in from product detail'
                 : 'Manual stock out from product detail'),
@@ -774,9 +722,9 @@ class _InventoryPageState extends State<InventoryPage> {
 
         final item = visibleItems[index - 1];
         final status = item.stockStatus;
-        final imageUrl = _imageUrlUseCase.resolveImageUrl(item.product.imageUrl);
+        final imageUrl = _imageService.resolveImageUrl(item.product.imageUrl);
         final proxyUrl = imageUrl != null
-            ? _imageUrlUseCase.proxyImageUrl(imageUrl)
+          ? _imageService.proxyImageUrl(imageUrl)
             : null;
 
         return InkWell(
@@ -972,12 +920,6 @@ class _InventoryPageState extends State<InventoryPage> {
 }
 
 // ── Supporting types (unchanged) ─────────────────────────────────────────────
-
-class _StockChangeInput {
-  final int quantity;
-  final String reason;
-  const _StockChangeInput({required this.quantity, required this.reason});
-}
 
 class _InventoryItem {
   final ProductModel product;

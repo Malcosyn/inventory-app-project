@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_app_project/theme/app_theme.dart';
 
 class AddSupplierInput {
 	final String name;
@@ -25,7 +26,12 @@ class AddSupplierDialog {
 			context: context,
 			builder: (context) {
 				return AlertDialog(
+					backgroundColor: AppColors.cardBg,
+					shape: RoundedRectangleBorder(
+						borderRadius: BorderRadius.circular(18),
+					),
 					title: const Text('Add Supplier'),
+					contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
 					content: SingleChildScrollView(
 						child: Column(
 							mainAxisSize: MainAxisSize.min,
@@ -34,6 +40,7 @@ class AddSupplierDialog {
 									controller: nameController,
 									decoration: const InputDecoration(
 										labelText: 'Supplier name',
+										hintText: 'Example: ABC Supplier',
 									),
 								),
 								const SizedBox(height: 8),
@@ -62,12 +69,15 @@ class AddSupplierDialog {
 							],
 						),
 					),
+						actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
 					actions: [
 						TextButton(
+								style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
 							onPressed: () => Navigator.of(context).pop(false),
 							child: const Text('Cancel'),
 						),
 						FilledButton(
+								style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
 							onPressed: () => Navigator.of(context).pop(true),
 							child: const Text('Save'),
 						),
