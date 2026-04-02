@@ -35,6 +35,13 @@ class CategoryService {
     await _client.from(_tableName).insert(category.toJson());
   }
 
+  Future<void> updateCategory(CategoryModel category) async {
+    await _client
+        .from(_tableName)
+        .update(category.toJson())
+        .eq('id', category.id);
+  }
+
   Future<void> deleteCategory(int id) async {
     await _client.from(_tableName).delete().eq('id', id);
   }

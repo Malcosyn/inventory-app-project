@@ -98,6 +98,111 @@ class _CategoryPageState extends State<CategoryPage> {
     }
   }
 
+  Future<void> _editCategory(CategoryModel category) async {
+    final controller = TextEditingController(text: category.name);
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('Edit Category'),
+          contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'Category name',
+              hintText: 'Example: Beverages',
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    final name = controller.text.trim();
+    controller.dispose();
+
+    if (shouldSave != true) return;
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Category name is required.')),
+      );
+      return;
+    }
+
+    try {
+      await _categoryService.updateCategory(
+        CategoryModel(
+          id: category.id,
+          storeId: category.storeId,
+          name: name,
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Category updated successfully.')),
+      );
+      await _loadCategories();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update category: $e')),
+      );
+    }
+  }
+
+  Future<void> _deleteCategory(CategoryModel category) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Category'),
+          content: Text('Delete category "${category.name}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _categoryService.deleteCategory(category.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Category deleted successfully.')),
+      );
+      await _loadCategories();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete category: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final navBarHeight = BottomNavigation.heightFor(context);
@@ -341,6 +446,42 @@ class _CategoryPageState extends State<CategoryPage> {
                   ),
                 ],
               ),
+            ),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') {
+                  _editCategory(category);
+                } else if (value == 'delete') {
+                  _deleteCategory(category);
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem<String>(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_outlined, size: 18),
+                      SizedBox(width: 8),
+                      Text('Edit'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<String>(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFDC2626)),
+                      SizedBox(width: 8),
+                      Text('Delete', style: TextStyle(color: Color(0xFFDC2626))),
+                    ],
+                  ),
+                ),
+              ],
+              icon: const Icon(Icons.more_horiz_rounded),
+              color: Colors.white,
+              surfaceTintColor: Colors.white,
+              iconColor: AppColors.textMedium,
+              tooltip: 'Category options',
             ),
           ],
         ),

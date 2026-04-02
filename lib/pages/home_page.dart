@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/inventory_model.dart';
-import 'package:inventory_app_project/models/order_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
+import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/pages/categories/category_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
 import 'package:inventory_app_project/pages/order_page.dart';
@@ -9,8 +9,8 @@ import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/pages/suppliers/suppliers_page.dart';
 import 'package:inventory_app_project/services/inventory_service.dart';
-import 'package:inventory_app_project/services/order_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
+import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
 import 'package:inventory_app_project/widgets/quick_actions_section.dart';
@@ -40,25 +40,144 @@ class _HomePageContentState extends State<_HomePageContent> {
 
   final ProductService _productService = ProductService();
   final InventoryService _inventoryService = InventoryService();
-  final OrderService _orderService = OrderService();
+  final StockMovementService _stockMovementService = StockMovementService();
 
   int _selectedNavIndex = 0;
   bool _isLoadingSummary = true;
   String? _summaryError;
   List<ProductModel> _products = const [];
   List<InventoryModel> _inventories = const [];
-  List<OrderModel> _orders = const [];
-  final List<double> _barData = [0.40, 0.60, 0.80, 0.55, 0.70, 0.90, 1.00];
-  final List<String> _dayLabels = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun',
-  ];
+  List<StockMovementModel> _stockMovements = const [];
   String _selectedRange = 'Last 7 Days';
+
+  int get _selectedDays => _selectedRange == 'Last 30 Days' ? 30 : 7;
+
+  _TrendData get _trendData => _buildTrendData(days: _selectedDays);
+
+  int get _todayTransactions {
+    final now = DateTime.now();
+    return _stockMovements.where((movement) {
+      final local = movement.createdAt.toLocal();
+      return local.year == now.year &&
+          local.month == now.month &&
+          local.day == now.day;
+    }).length;
+  }
+
+  String get _transactionTrendPercent {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    final todayCount = _stockMovements.where((movement) {
+      final local = movement.createdAt.toLocal();
+      return local.year == today.year &&
+          local.month == today.month &&
+          local.day == today.day;
+    }).length;
+
+    final yesterdayCount = _stockMovements.where((movement) {
+      final local = movement.createdAt.toLocal();
+      return local.year == yesterday.year &&
+          local.month == yesterday.month &&
+          local.day == yesterday.day;
+    }).length;
+
+    if (yesterdayCount == 0) {
+      if (todayCount == 0) return '0%';
+      return '+100%';
+    }
+
+    final diff = ((todayCount - yesterdayCount) / yesterdayCount) * 100;
+    final rounded = diff.round();
+    if (rounded > 0) return '+$rounded%';
+    return '$rounded%';
+  }
+
+  _TrendData _buildTrendData({required int days}) {
+    if (days <= 0) {
+      return const _TrendData(
+        bars: [0, 0, 0, 0, 0, 0, 0],
+        labels: ['-', '-', '-', '-', '-', '-', '-'],
+      );
+    }
+
+    const int bucketCount = 7;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final start = today.subtract(Duration(days: days - 1));
+
+    final totalsByDay = <DateTime, int>{};
+    for (final movement in _stockMovements) {
+      final local = movement.createdAt.toLocal();
+      final day = DateTime(local.year, local.month, local.day);
+      if (day.isBefore(start) || day.isAfter(today)) continue;
+      totalsByDay.update(day, (value) => value + movement.quantity,
+          ifAbsent: () => movement.quantity);
+    }
+
+    final bucketSize = (days / bucketCount).ceil();
+    final bucketValues = <int>[];
+    final bucketLabels = <String>[];
+
+    for (var i = 0; i < bucketCount; i++) {
+      final bucketStart = start.add(Duration(days: i * bucketSize));
+      if (bucketStart.isAfter(today)) {
+        bucketValues.add(0);
+        bucketLabels.add('-');
+        continue;
+      }
+
+      var bucketEnd = bucketStart.add(Duration(days: bucketSize - 1));
+      if (bucketEnd.isAfter(today)) {
+        bucketEnd = today;
+      }
+
+      var total = 0;
+      var cursor = bucketStart;
+      while (!cursor.isAfter(bucketEnd)) {
+        total += totalsByDay[cursor] ?? 0;
+        cursor = cursor.add(const Duration(days: 1));
+      }
+
+      bucketValues.add(total);
+      bucketLabels.add(days == 7
+          ? _weekdayShort(bucketStart.weekday)
+          : '${bucketStart.day}/${bucketStart.month}');
+    }
+
+    final maxValue = bucketValues.fold<int>(0, (max, value) => value > max ? value : max);
+    final bars = bucketValues
+        .map((value) {
+          if (maxValue == 0) return 0.0;
+          final fraction = value / maxValue;
+          return value > 0 ? fraction.clamp(0.12, 1.0) : 0.0;
+        })
+        .toList();
+
+    return _TrendData(bars: bars, labels: bucketLabels);
+  }
+
+  String _weekdayShort(int weekday) {
+    switch (weekday) {
+      case DateTime.monday:
+        return 'Mon';
+      case DateTime.tuesday:
+        return 'Tue';
+      case DateTime.wednesday:
+        return 'Wed';
+      case DateTime.thursday:
+        return 'Thu';
+      case DateTime.friday:
+        return 'Fri';
+      case DateTime.saturday:
+        return 'Sat';
+      case DateTime.sunday:
+        return 'Sun';
+      default:
+        return '-';
+    }
+  }
 
   void _onBottomNavChanged(int index) {
     if (index == 0) {
@@ -102,7 +221,7 @@ class _HomePageContentState extends State<_HomePageContent> {
     final errors = <String>[];
     List<ProductModel> products = const [];
     List<InventoryModel> inventories = const [];
-    List<OrderModel> orders = const [];
+    List<StockMovementModel> stockMovements = const [];
 
     try {
       products = await _productService.getProductsByStoreId(_defaultStoreId);
@@ -117,9 +236,11 @@ class _HomePageContentState extends State<_HomePageContent> {
     }
 
     try {
-      orders = await _orderService.getOrdersByStoreId(_defaultStoreId);
+      stockMovements = await _stockMovementService.getStockMovementsByStoreId(
+        _defaultStoreId,
+      );
     } catch (e) {
-      errors.add('orders: $e');
+      errors.add('stock_movement: $e');
     }
 
     if (!mounted) return;
@@ -127,7 +248,7 @@ class _HomePageContentState extends State<_HomePageContent> {
     setState(() {
       _products = products;
       _inventories = inventories;
-      _orders = orders;
+      _stockMovements = stockMovements;
       _summaryError = errors.isEmpty ? null : errors.first;
       _isLoadingSummary = false;
     });
@@ -416,7 +537,7 @@ class _HomePageContentState extends State<_HomePageContent> {
     final lowStockItems = _inventories
         .where((inv) => inv.stockQuantity < inv.lowStockThreshold)
         .length;
-    final todayTransactions = _orders.length;
+    final todayTransactions = _todayTransactions;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -506,7 +627,11 @@ class _HomePageContentState extends State<_HomePageContent> {
                 ],
               ),
               const SizedBox(height: 12),
-              _transactionCard(todayTransactions, _isLoadingSummary),
+              _transactionCard(
+                todayTransactions,
+                _isLoadingSummary,
+                _transactionTrendPercent,
+              ),
             ],
           ),
         ],
@@ -581,7 +706,7 @@ class _HomePageContentState extends State<_HomePageContent> {
     );
   }
 
-  Widget _transactionCard(int count, bool isLoading) {
+  Widget _transactionCard(int count, bool isLoading, String trendPercent) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -631,7 +756,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                   ),
                 ),
               const Text(
-                "Today's Transactions",
+                'Today Stock Movement',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
@@ -641,20 +766,26 @@ class _HomePageContentState extends State<_HomePageContent> {
             ],
           ),
           const Spacer(),
-          const Row(
+          Row(
             children: [
               Icon(
-                Icons.trending_up_rounded,
-                color: Color(0xFF22C55E),
+                trendPercent.startsWith('-')
+                    ? Icons.trending_down_rounded
+                    : Icons.trending_up_rounded,
+                color: trendPercent.startsWith('-')
+                    ? const Color(0xFFEF4444)
+                    : const Color(0xFF22C55E),
                 size: 18,
               ),
-              SizedBox(width: 2),
+              const SizedBox(width: 2),
               Text(
-                '12%',
+                trendPercent,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF22C55E),
+                  color: trendPercent.startsWith('-')
+                      ? const Color(0xFFEF4444)
+                      : const Color(0xFF22C55E),
                 ),
               ),
             ],
@@ -665,6 +796,8 @@ class _HomePageContentState extends State<_HomePageContent> {
   }
 
   Widget _buildStockTrend() {
+    final trendData = _trendData;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
@@ -714,14 +847,14 @@ class _HomePageContentState extends State<_HomePageContent> {
                   height: 160,
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
-                    children: List.generate(_barData.length, (i) {
+                    children: List.generate(trendData.bars.length, (i) {
                       return Expanded(
                         child: Padding(
                           padding: EdgeInsets.only(
                             left: i == 0 ? 0 : 4,
-                            right: i == _barData.length - 1 ? 0 : 4,
+                            right: i == trendData.bars.length - 1 ? 0 : 4,
                           ),
-                          child: _Bar(heightFraction: _barData[i]),
+                          child: _Bar(heightFraction: trendData.bars[i]),
                         ),
                       );
                     }),
@@ -730,7 +863,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: _dayLabels
+                  children: trendData.labels
                       .map(
                         (d) => Text(
                           d,
@@ -791,7 +924,7 @@ class _BarState extends State<_Bar> {
               alignment: Alignment.bottomCenter,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                height: maxH * widget.heightFraction,
+                height: maxH * widget.heightFraction.clamp(0.0, 1.0),
                 decoration: BoxDecoration(
                   color: _hovered
                       ? AppColors.primary
@@ -807,4 +940,11 @@ class _BarState extends State<_Bar> {
       ),
     );
   }
+}
+
+class _TrendData {
+  final List<double> bars;
+  final List<String> labels;
+
+  const _TrendData({required this.bars, required this.labels});
 }
