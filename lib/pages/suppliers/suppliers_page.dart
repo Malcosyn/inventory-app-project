@@ -99,6 +99,150 @@ class _SuppliersPageState extends State<SuppliersPage> {
     }
   }
 
+  Future<void> _editSupplier(SupplierModel supplier) async {
+    final nameController = TextEditingController(text: supplier.name);
+    final phoneController = TextEditingController(text: supplier.phone);
+    final addressController = TextEditingController(text: supplier.address);
+    final emailController = TextEditingController(text: supplier.email ?? '');
+
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('Edit Supplier'),
+          contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Supplier name',
+                    hintText: 'Example: ABC Supplier',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Phone'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: addressController,
+                  decoration: const InputDecoration(labelText: 'Address'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Email (optional)'),
+                ),
+              ],
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    final name = nameController.text.trim();
+    final phone = phoneController.text.trim();
+    final address = addressController.text.trim();
+    final email = emailController.text.trim();
+
+    nameController.dispose();
+    phoneController.dispose();
+    addressController.dispose();
+    emailController.dispose();
+
+    if (shouldSave != true) return;
+
+    if (name.isEmpty || phone.isEmpty || address.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Name, phone, and address are required.')),
+      );
+      return;
+    }
+
+    try {
+      await _supplierService.updateSupplier(
+        SupplierModel(
+          id: supplier.id,
+          name: name,
+          phone: phone,
+          address: address,
+          email: email.isEmpty ? null : email,
+          storeId: supplier.storeId,
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Supplier updated successfully.')),
+      );
+      await _loadSuppliers();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update supplier: $e')),
+      );
+    }
+  }
+
+  Future<void> _deleteSupplier(SupplierModel supplier) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Supplier'),
+          content: Text('Delete supplier "${supplier.name}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _supplierService.deleteSupplier(supplier.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Supplier deleted successfully.')),
+      );
+      await _loadSuppliers();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete supplier: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final navBarHeight = BottomNavigation.heightFor(context);
@@ -345,6 +489,42 @@ class _SuppliersPageState extends State<SuppliersPage> {
                       ),
                     ],
                   ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _editSupplier(supplier);
+                    } else if (value == 'delete') {
+                      _deleteSupplier(supplier);
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem<String>(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFDC2626)),
+                          SizedBox(width: 8),
+                          Text('Delete', style: TextStyle(color: Color(0xFFDC2626))),
+                        ],
+                      ),
+                    ),
+                  ],
+                  icon: const Icon(Icons.more_horiz_rounded),
+                  color: Colors.white,
+                  surfaceTintColor: Colors.white,
+                  iconColor: AppColors.textMedium,
+                  tooltip: 'Supplier options',
                 ),
               ],
             ),

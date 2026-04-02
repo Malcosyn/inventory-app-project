@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/category_model.dart';
 import 'package:inventory_app_project/models/inventory_model.dart';
@@ -47,6 +49,23 @@ class _InventoryPageState extends State<InventoryPage> {
   final SupplierService _supplierService = SupplierService();
   final ProductService _imageService = ProductService();
   final TextEditingController _searchController = TextEditingController();
+
+  String _generateUuidV4() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+
+    // RFC 4122 variant and version bits.
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+    String hex(int value) => value.toRadixString(16).padLeft(2, '0');
+
+    return '${hex(bytes[0])}${hex(bytes[1])}${hex(bytes[2])}${hex(bytes[3])}-'
+        '${hex(bytes[4])}${hex(bytes[5])}-'
+        '${hex(bytes[6])}${hex(bytes[7])}-'
+        '${hex(bytes[8])}${hex(bytes[9])}-'
+        '${hex(bytes[10])}${hex(bytes[11])}${hex(bytes[12])}${hex(bytes[13])}${hex(bytes[14])}${hex(bytes[15])}';
+  }
 
   bool _isLoading = true;
   String? _error;
@@ -260,7 +279,7 @@ class _InventoryPageState extends State<InventoryPage> {
 
     try {
       final supplier = SupplierModel(
-        id: 'sup_${DateTime.now().microsecondsSinceEpoch}',
+        id: _generateUuidV4(),
         name: input.name,
         phone: input.phone,
         address: input.address,
@@ -787,6 +806,7 @@ class _InventoryPageState extends State<InventoryPage> {
                     color: const Color(0xFFF1F5F9),
                     child: imageUrl != null
                         ? _InventoryProductImage(
+                            key: ValueKey('${item.product.id}_${imageUrl}'),
                             primaryUrl: imageUrl,
                             fallbackUrl: proxyUrl,
                             productName: item.product.name,
@@ -859,6 +879,8 @@ class _InventoryPageState extends State<InventoryPage> {
                                 _changeStock(item: item, isStockIn: true);
                               } else if (value == 'stock_out') {
                                 _changeStock(item: item, isStockIn: false);
+                              } else if (value == 'delete') {
+                                _deleteProduct(item);
                               }
                             },
                             itemBuilder: (context) => const [
@@ -889,6 +911,16 @@ class _InventoryPageState extends State<InventoryPage> {
                                     Icon(Icons.arrow_upward_rounded, size: 18),
                                     SizedBox(width: 8),
                                     Text('Stock Out'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem<String>(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFDC2626)),
+                                    SizedBox(width: 8),
+                                    Text('Delete', style: TextStyle(color: Color(0xFFDC2626))),
                                   ],
                                 ),
                               ),
@@ -977,6 +1009,7 @@ class _InventoryProductImage extends StatefulWidget {
   final String productName;
 
   const _InventoryProductImage({
+    super.key,
     required this.primaryUrl,
     required this.fallbackUrl,
     required this.productName,
@@ -994,6 +1027,16 @@ class _InventoryProductImageState extends State<_InventoryProductImage> {
   void initState() {
     super.initState();
     _activeUrl = widget.primaryUrl;
+  }
+
+  @override
+  void didUpdateWidget(covariant _InventoryProductImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.primaryUrl != widget.primaryUrl ||
+        oldWidget.fallbackUrl != widget.fallbackUrl) {
+      _usingFallback = false;
+      _activeUrl = widget.primaryUrl;
+    }
   }
 
   @override
