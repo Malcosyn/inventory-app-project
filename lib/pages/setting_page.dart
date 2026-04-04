@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/store_model.dart';
-import 'package:inventory_app_project/pages/home_page.dart';
-import 'package:inventory_app_project/pages/inventory_page.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/pages/login_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
-import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/services/store_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
@@ -126,25 +123,10 @@ class _SettingPageState extends State<SettingPage> {
   }
 
   void _onBottomNavChanged(BuildContext context, int index) {
-    final Widget page;
-    switch (index) {
-      case 0:
-        page = const HomePage();
-      case 1:
-        page = const InventoryPage();
-      case 2:
-        page = const OrderPage();
-      case 3:
-        page = const StockMovementPage();
-      case 4:
-        return;
-      default:
-        return;
-    }
-
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    if (index == 4) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => AppShellPage(initialIndex: index)),
+    );
   }
 
   Widget _buildSettingsItem({

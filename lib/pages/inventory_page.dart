@@ -6,14 +6,11 @@ import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/pages/categories/add_category_dialog.dart';
-import 'package:inventory_app_project/pages/home_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
 import 'package:inventory_app_project/pages/products/add_product_dialog.dart';
 import 'package:inventory_app_project/pages/products/edit_product_dialog.dart';
 import 'package:inventory_app_project/pages/products/product_detail.dart';
-import 'package:inventory_app_project/pages/setting_page.dart';
-import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/pages/stock_movements/add_stock_movement_dialog.dart';
 import 'package:inventory_app_project/pages/suppliers/add_supplier_dialog.dart';
 import 'package:inventory_app_project/services/category_service.dart';
@@ -367,7 +364,14 @@ class _InventoryPageState extends State<InventoryPage> {
         break;
       case InventoryQuickAction.addOrder:
         if (!mounted) return;
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrderPage()));
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => const AppShellPage(
+              initialIndex: 2,
+              openOrderComposerOnStart: true,
+            ),
+          ),
+        );
         break;
       case InventoryQuickAction.stockIn:
         await _pickProductForStockChange(isStockIn: true);
@@ -528,22 +532,10 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   void _onBottomNavChanged(BuildContext context, int index) {
-    final Widget page;
-    switch (index) {
-      case 0:
-        page = const HomePage();
-      case 1:
-        return;
-      case 2:
-        page = const OrderPage();
-      case 3:
-        page = const StockMovementPage();
-      case 4:
-        page = const SettingPage();
-      default:
-        return;
-    }
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    if (index == 1) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => AppShellPage(initialIndex: index)),
+    );
   }
 
   List<_InventoryItem> get _visibleItems {
@@ -806,7 +798,7 @@ class _InventoryPageState extends State<InventoryPage> {
                     color: const Color(0xFFF1F5F9),
                     child: imageUrl != null
                         ? _InventoryProductImage(
-                            key: ValueKey('${item.product.id}_${imageUrl}'),
+                            key: ValueKey('${item.product.id}_$imageUrl'),
                             primaryUrl: imageUrl,
                             fallbackUrl: proxyUrl,
                             productName: item.product.name,
