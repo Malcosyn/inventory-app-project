@@ -61,7 +61,9 @@ class _SettingPageState extends State<SettingPage> {
 
       int supplierCount = 0;
       if (firstStore != null) {
-        final suppliers = await _supplierService.getSuppliersByStoreId(firstStore.id);
+        final suppliers = await _supplierService.getSuppliersByStoreId(
+          firstStore.id,
+        );
         supplierCount = suppliers.length;
       }
 
@@ -105,12 +107,17 @@ class _SettingPageState extends State<SettingPage> {
   }
 
   String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return 'U';
     if (parts.length == 1) {
       return parts.first.substring(0, 1).toUpperCase();
     }
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 
   Future<void> _logout() async {
@@ -177,14 +184,20 @@ class _SettingPageState extends State<SettingPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: AppColors.errorText),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.errorText,
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Failed to load profile',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
-              ElevatedButton(onPressed: _loadProfile, child: const Text('Try again')),
+              ElevatedButton(
+                onPressed: _loadProfile,
+                child: const Text('Try again'),
+              ),
             ],
           ),
         ),
@@ -197,186 +210,225 @@ class _SettingPageState extends State<SettingPage> {
 
     return RefreshIndicator(
       onRefresh: _loadProfile,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-        children: [
-          Row(
-            children: [
-              const Text(
-                'Profile',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: _logout,
-                tooltip: 'Logout',
-                icon: const Icon(Icons.logout_rounded, color: Color(0xFFC87F2E)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.borderColor),
-            ),
-            child: Column(
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          children: [
+            Row(
               children: [
-                CircleAvatar(
-                  radius: 34,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.25),
-                  child: Text(
-                    _initials(displayName),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF8D5A1E),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  displayName,
-                  style: const TextStyle(
-                    fontSize: 18,
+                const Text(
+                  'Profile',
+                  style: TextStyle(
+                    fontSize: 22,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textDark,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  roleLabel,
-                  style: const TextStyle(fontSize: 13, color: AppColors.textMedium),
-                ),
-                if (user?.email != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    user!.email!,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textMedium),
+                const Spacer(),
+                IconButton(
+                  onPressed: _logout,
+                  tooltip: 'Logout',
+                  icon: const Icon(
+                    Icons.logout_rounded,
+                    color: Color(0xFFC87F2E),
                   ),
-                ],
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'STORE INFORMATION',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1,
-              color: AppColors.textMedium,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.borderColor),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(10),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.borderColor),
+              ),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 34,
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.25),
+                    child: Text(
+                      _initials(displayName),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF8D5A1E),
                       ),
-                      child: const Icon(Icons.storefront_rounded, color: Color(0xFFC87F2E)),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _store?.name ?? 'No store linked',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textDark,
-                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    displayName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    roleLabel,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textMedium,
+                    ),
+                  ),
+                  if (user?.email != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      user!.email!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMedium,
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 10),
-                _InfoRow(label: 'Business ID', value: _store != null ? 'STORE-${_store!.id}' : '-'),
-                _InfoRow(label: 'Phone', value: _store?.phone ?? '-'),
-                _InfoRow(label: 'Address', value: _store?.address ?? '-'),
-                _InfoRow(label: 'Suppliers', value: '$_supplierCount'),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'ACCOUNT SETTINGS',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1,
-              color: AppColors.textMedium,
+            const SizedBox(height: 14),
+            const Text(
+              'STORE INFORMATION',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+                color: AppColors.textMedium,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.borderColor),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.borderColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.storefront_rounded,
+                          color: Color(0xFFC87F2E),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _store?.name ?? 'No store linked',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _InfoRow(
+                    label: 'Business ID',
+                    value: _store != null ? 'STORE-${_store!.id}' : '-',
+                  ),
+                  _InfoRow(label: 'Phone', value: _store?.phone ?? '-'),
+                  _InfoRow(label: 'Address', value: _store?.address ?? '-'),
+                  _InfoRow(label: 'Suppliers', value: '$_supplierCount'),
+                ],
+              ),
             ),
-            child: Column(
+            const SizedBox(height: 14),
+            const Text(
+              'ACCOUNT SETTINGS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+                color: AppColors.textMedium,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.borderColor),
+              ),
+              child: Column(
+                children: [
+                  _buildSettingsItem(
+                    icon: Icons.person_outline_rounded,
+                    label: 'Edit Profile',
+                  ),
+                  _buildSettingsItem(
+                    icon: Icons.shield_outlined,
+                    label: 'Security & Privacy',
+                  ),
+                  _buildSettingsItem(
+                    icon: Icons.notifications_none_rounded,
+                    label: 'Notifications',
+                    value: _supplierCount > 0
+                        ? '$_supplierCount updates'
+                        : null,
+                  ),
+                  _buildSettingsItem(
+                    icon: Icons.translate_rounded,
+                    label: 'Language',
+                    value: 'English',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'HELP & SUPPORT',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+                color: AppColors.textMedium,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
               children: [
-                _buildSettingsItem(icon: Icons.person_outline_rounded, label: 'Edit Profile'),
-                _buildSettingsItem(icon: Icons.shield_outlined, label: 'Security & Privacy'),
-                _buildSettingsItem(
-                  icon: Icons.notifications_none_rounded,
-                  label: 'Notifications',
-                  value: _supplierCount > 0 ? '$_supplierCount updates' : null,
+                Expanded(
+                  child: _SupportCard(
+                    icon: Icons.help_outline_rounded,
+                    label: 'Help Center',
+                  ),
                 ),
-                _buildSettingsItem(icon: Icons.translate_rounded, label: 'Language', value: 'English'),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SupportCard(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    label: 'Contact Support',
+                  ),
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'HELP & SUPPORT',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1,
-              color: AppColors.textMedium,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _SupportCard(icon: Icons.help_outline_rounded, label: 'Help Center'),
+            const SizedBox(height: 18),
+            const Center(
+              child: Text(
+                'StockFlow v2.4.0',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textLight,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _SupportCard(icon: Icons.chat_bubble_outline_rounded, label: 'Contact Support'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          const Center(
-            child: Text(
-              'StockFlow v2.4.0',
-              style: TextStyle(fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.w700),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
