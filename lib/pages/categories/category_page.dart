@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/category_model.dart';
 import 'package:inventory_app_project/pages/categories/add_category_dialog.dart';
-import 'package:inventory_app_project/pages/home_page.dart';
-import 'package:inventory_app_project/pages/inventory_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
-import 'package:inventory_app_project/pages/setting_page.dart';
-import 'package:inventory_app_project/pages/stock_movement_page.dart';
-import 'package:inventory_app_project/pages/suppliers/suppliers_page.dart';
 import 'package:inventory_app_project/services/category_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
-import 'package:inventory_app_project/widgets/bottom_navigation.dart';
 
 class CategoryPage extends StatefulWidget {
   final bool showBottomNav;
@@ -25,7 +18,6 @@ class _CategoryPageState extends State<CategoryPage> {
 
   final CategoryService _categoryService = CategoryService();
 
-  int _selectedNavIndex = 1;
   bool _isLoading = true;
   String? _error;
   List<CategoryModel> _categories = const [];
@@ -65,30 +57,6 @@ class _CategoryPageState extends State<CategoryPage> {
     return _categories
         .where((c) => c.name.toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
-  }
-
-  void _onBottomNavChanged(int index) {
-    if (index == _selectedNavIndex) return;
-
-    final Widget page;
-    switch (index) {
-      case 0:
-        page = const HomePage();
-      case 1:
-        page = const InventoryPage();
-      case 2:
-        page = const OrderPage();
-      case 3:
-        page = const StockMovementPage();
-      case 4:
-        page = const SuppliersPage();
-      case 5:
-        page = const SettingPage();
-      default:
-        return;
-    }
-
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => page));
   }
 
   Future<void> _addCategory() async {
@@ -205,8 +173,6 @@ class _CategoryPageState extends State<CategoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final navBarHeight = BottomNavigation.heightFor(context);
-
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       floatingActionButton: FloatingActionButton(
@@ -237,17 +203,12 @@ class _CategoryPageState extends State<CategoryPage> {
                     childCount: _visibleCategories.length,
                   ),
                 ),
-              SliverToBoxAdapter(child: SizedBox(height: navBarHeight + 16)),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: MediaQuery.of(context).padding.bottom + 16,
+                ),
+              ),
             ],
-          ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: BottomNavigation(
-              selectedIndex: _selectedNavIndex,
-              onNavChanged: _onBottomNavChanged,
-            ),
           ),
         ],
       ),

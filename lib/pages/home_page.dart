@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/pages/categories/category_page.dart';
-import 'package:inventory_app_project/pages/inventory_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
-import 'package:inventory_app_project/pages/setting_page.dart';
-import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/pages/suppliers/suppliers_page.dart';
 import 'package:inventory_app_project/services/inventory_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
@@ -186,24 +183,9 @@ class _HomePageContentState extends State<_HomePageContent> {
       }
       return;
     }
-
-    final Widget page;
-    switch (index) {
-      case 1:
-        page = const InventoryPage();
-      case 2:
-        page = const OrderPage();
-      case 3:
-        page = const StockMovementPage();
-      case 4:
-        page = const SettingPage();
-      default:
-        return;
-    }
-
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => AppShellPage(initialIndex: index)),
+    );
   }
 
   @override
@@ -257,8 +239,13 @@ class _HomePageContentState extends State<_HomePageContent> {
   Future<void> _handleQuickAction(InventoryQuickAction action) async {
     switch (action) {
       case InventoryQuickAction.addOrder:
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const OrderPage()),
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => const AppShellPage(
+              initialIndex: 2,
+              openOrderComposerOnStart: true,
+            ),
+          ),
         );
         break;
       case InventoryQuickAction.addItem:
@@ -266,9 +253,12 @@ class _HomePageContentState extends State<_HomePageContent> {
       case InventoryQuickAction.addCategory:
       case InventoryQuickAction.stockIn:
       case InventoryQuickAction.stockOut:
-        Navigator.of(context).push(
+        Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => InventoryPage(initialQuickAction: action),
+            builder: (_) => AppShellPage(
+              initialIndex: 1,
+              initialInventoryQuickAction: action,
+            ),
           ),
         );
         break;
@@ -390,9 +380,12 @@ class _HomePageContentState extends State<_HomePageContent> {
                 iconColor: AppColors.textOnPrimary,
                 hasShadow: true,
                 onTap: () {
-                  Navigator.of(context).push(
+                  Navigator.of(context).pushReplacement(
                     MaterialPageRoute(
-                      builder: (_) => InventoryPage(initialQuickAction: InventoryQuickAction.addItem),
+                      builder: (_) => const AppShellPage(
+                        initialIndex: 1,
+                        initialInventoryQuickAction: InventoryQuickAction.addItem,
+                      ),
                     ),
                   );
                 },
@@ -414,7 +407,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const SuppliersPage(),
+                      builder: (_) => const SuppliersPage(showBottomNav: false),
                     ),
                   );
                 },
@@ -428,7 +421,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const CategoryPage(),
+                      builder: (_) => const CategoryPage(showBottomNav: false),
                     ),
                   );
                 },
@@ -440,8 +433,13 @@ class _HomePageContentState extends State<_HomePageContent> {
                 iconColor: AppColors.textDark,
                 hasBorder: true,
                 onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const OrderPage()),
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => const AppShellPage(
+                        initialIndex: 2,
+                        openOrderComposerOnStart: true,
+                      ),
+                    ),
                   );
                 },
               ),

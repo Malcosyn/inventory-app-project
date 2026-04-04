@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
-import 'package:inventory_app_project/pages/home_page.dart';
-import 'package:inventory_app_project/pages/inventory_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
-import 'package:inventory_app_project/pages/setting_page.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
@@ -99,8 +96,9 @@ class _StockMovementPageState extends State<StockMovementPage> {
     if (!mounted) return;
     await Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => InventoryPage(
-          initialQuickAction:
+        builder: (_) => AppShellPage(
+          initialIndex: 1,
+          initialInventoryQuickAction:
               stockIn ? InventoryQuickAction.stockIn : InventoryQuickAction.stockOut,
         ),
       ),
@@ -108,25 +106,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
   }
 
   void _onBottomNavChanged(BuildContext context, int index) {
-    final Widget page;
-    switch (index) {
-      case 0:
-        page = const HomePage();
-      case 1:
-        page = const InventoryPage();
-      case 2:
-        page = const OrderPage();
-      case 3:
-        return;
-      case 4:
-        page = const SettingPage();
-      default:
-        return;
-    }
-
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    if (index == 3) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => AppShellPage(initialIndex: index)),
+    );
   }
 
   Widget _buildQuickCards() {
@@ -461,8 +444,6 @@ class _StockMovementPageState extends State<StockMovementPage> {
 
   @override
   Widget build(BuildContext context) {
-    final navBarHeight = BottomNavigation.heightFor(context);
-
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: Stack(
