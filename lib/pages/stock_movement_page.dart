@@ -55,9 +55,7 @@ class _StockMovementPageState extends State<StockMovementPage> {
 
       setState(() {
         _movements = movements;
-        _productsById = {
-          for (final p in products) p.id: p,
-        };
+        _productsById = {for (final p in products) p.id: p};
         _isLoading = false;
       });
     } catch (e) {
@@ -98,8 +96,9 @@ class _StockMovementPageState extends State<StockMovementPage> {
       MaterialPageRoute(
         builder: (_) => AppShellPage(
           initialIndex: 1,
-          initialInventoryQuickAction:
-              stockIn ? InventoryQuickAction.stockIn : InventoryQuickAction.stockOut,
+          initialInventoryQuickAction: stockIn
+              ? InventoryQuickAction.stockIn
+              : InventoryQuickAction.stockOut,
         ),
       ),
     );
@@ -149,7 +148,9 @@ class _StockMovementPageState extends State<StockMovementPage> {
           backgroundColor: AppColors.darkSurface,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
         child: const Row(
           children: [
@@ -196,7 +197,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
               height: 48,
               color: AppColors.iconBgLight,
               child: imageUrl == null
-                  ? const Icon(Icons.inventory_2_outlined, color: AppColors.textLight)
+                  ? const Icon(
+                      Icons.inventory_2_outlined,
+                      color: AppColors.textLight,
+                    )
                   : Image.network(
                       imageUrl,
                       fit: BoxFit.cover,
@@ -254,7 +258,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: isIn
                             ? const Color(0xFFEAF5DF)
@@ -273,7 +280,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
                     const Spacer(),
                     Text(
                       _timeAgo(movement.createdAt),
-                      style: const TextStyle(fontSize: 11, color: AppColors.textMedium),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMedium,
+                      ),
                     ),
                   ],
                 ),
@@ -297,7 +307,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: AppColors.errorText),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.errorText,
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Failed to load stock movements',
@@ -324,120 +337,125 @@ class _StockMovementPageState extends State<StockMovementPage> {
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.swap_vert_rounded, color: Color(0xFFC87F2E)),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Stock Management',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textDark,
-                      ),
-                    ),
-                    Text(
-                      'Inventory flow overview',
-                      style: TextStyle(fontSize: 12, color: AppColors.textMedium),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: _loadData,
-                icon: const Icon(Icons.refresh_rounded),
-                tooltip: 'Reload',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.borderColor),
-            ),
-            child: Row(
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
+          children: [
+            Row(
               children: [
-                Expanded(
-                  child: _MetricTile(
-                    label: 'In Today',
-                    value: '$stockInToday',
-                    color: const Color(0xFF4D7A35),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.swap_vert_rounded,
+                    color: Color(0xFFC87F2E),
                   ),
                 ),
-                Container(width: 1, height: 34, color: AppColors.borderColor),
-                Expanded(
-                  child: _MetricTile(
-                    label: 'Out Today',
-                    value: '$stockOutToday',
-                    color: AppColors.errorText,
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Stock Management',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                      Text(
+                        'Inventory flow overview',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMedium,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Container(width: 1, height: 34, color: AppColors.borderColor),
-                Expanded(
-                  child: _MetricTile(
-                    label: 'Activity',
-                    value: '${_movements.length}',
-                    color: const Color(0xFFC87F2E),
-                  ),
+                IconButton(
+                  onPressed: _loadData,
+                  icon: const Icon(Icons.refresh_rounded),
+                  tooltip: 'Reload',
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
-          _buildQuickCards(),
-          const SizedBox(height: 14),
-          _buildScanButton(),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Recent Activity',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textDark,
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.borderColor),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _MetricTile(
+                      label: 'In Today',
+                      value: '$stockInToday',
+                      color: const Color(0xFF4D7A35),
+                    ),
+                  ),
+                  Container(width: 1, height: 34, color: AppColors.borderColor),
+                  Expanded(
+                    child: _MetricTile(
+                      label: 'Out Today',
+                      value: '$stockOutToday',
+                      color: AppColors.errorText,
+                    ),
+                  ),
+                  Container(width: 1, height: 34, color: AppColors.borderColor),
+                  Expanded(
+                    child: _MetricTile(
+                      label: 'Activity',
+                      value: '${_movements.length}',
+                      color: const Color(0xFFC87F2E),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            _buildQuickCards(),
+            const SizedBox(height: 14),
+            _buildScanButton(),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Recent Activity',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textDark,
+                    ),
                   ),
                 ),
-              ),
-              TextButton(
-                onPressed: _loadData,
-                child: const Text('Refresh'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (_movements.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  'No stock movement yet.',
-                  style: TextStyle(color: AppColors.textMedium),
+                TextButton(onPressed: _loadData, child: const Text('Refresh')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_movements.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    'No stock movement yet.',
+                    style: TextStyle(color: AppColors.textMedium),
+                  ),
                 ),
-              ),
-            )
-          else
-            ..._movements.take(20).map(_buildActivityItem),
-        ],
+              )
+            else
+              ..._movements.take(20).map(_buildActivityItem),
+          ],
+        ),
       ),
     );
   }

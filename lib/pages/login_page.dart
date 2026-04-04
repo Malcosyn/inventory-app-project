@@ -28,6 +28,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _obscurePassword = true;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -48,7 +49,7 @@ class _LoginPageState extends State<LoginPage> {
               children: [
                 _buildLogoSection(),
                 const SizedBox(height: 32),
-                _buildLoginCard(context, widget.isLoading, authService),
+                _buildLoginCard(context, widget.isLoading || _isSubmitting, authService),
                 const SizedBox(height: 32),
                 _buildFooterLinks(),
                 const SizedBox(height: 16),
@@ -240,16 +241,30 @@ class _LoginPageState extends State<LoginPage> {
                     ? null
                     : () async {
                         if (_formKey.currentState!.validate()) {
-                          service.signInWithEmailAndPassword(
-                            _emailController.text,
-                            _passwordController.text,
-                          );
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const AppShellPage(),
-                            ),
-                          );
+                          final navigator = Navigator.of(context);
+                          final messenger = ScaffoldMessenger.of(context);
+                          setState(() => _isSubmitting = true);
+                          try {
+                            await service.signInWithEmailAndPassword(
+                              _emailController.text.trim(),
+                              _passwordController.text,
+                            );
+                            if (!mounted) return;
+                            navigator.pushReplacement(
+                              MaterialPageRoute(
+                                builder: (context) => const AppShellPage(),
+                              ),
+                            );
+                          } catch (e) {
+                            if (!mounted) return;
+                            messenger.showSnackBar(
+                              SnackBar(content: Text('Login failed: $e')),
+                            );
+                          } finally {
+                            if (mounted) {
+                              setState(() => _isSubmitting = false);
+                            }
+                          }
                         }
                       },
                 style: ElevatedButton.styleFrom(
