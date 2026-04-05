@@ -1,4 +1,4 @@
-
+import 'dart:math';
 
 import 'package:inventory_app_project/models/order_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,6 +22,25 @@ class OrderService {
 
   Future<void> createOrder(OrderModel order) async {
     await _client.from(_tableName).insert(order.toJson());
+  }
+
+  Future<void> createOrderEntry({
+    required String productId,
+    required int totalPrice,
+    required int totalItem,
+    required String status,
+    required String unitType,
+    required int storeId,
+  }) async {
+    await _client.from(_tableName).insert({
+      'id': _generateUuidV4(),
+      'product_id': productId,
+      'total_price': totalPrice,
+      'total_item': totalItem,
+      'status': status,
+      'unit_type': unitType,
+      'store_id': storeId,
+    });
   }
 
   Future<void> updateOrder(OrderModel order) async {
@@ -72,4 +91,19 @@ class OrderService {
     return response.map((e) => OrderModel.fromJson(e)).toList();
   }
 
+  String _generateUuidV4() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+    String hex(int value) => value.toRadixString(16).padLeft(2, '0');
+
+    return '${hex(bytes[0])}${hex(bytes[1])}${hex(bytes[2])}${hex(bytes[3])}-'
+        '${hex(bytes[4])}${hex(bytes[5])}-'
+        '${hex(bytes[6])}${hex(bytes[7])}-'
+        '${hex(bytes[8])}${hex(bytes[9])}-'
+        '${hex(bytes[10])}${hex(bytes[11])}${hex(bytes[12])}${hex(bytes[13])}${hex(bytes[14])}${hex(bytes[15])}';
+  }
 }

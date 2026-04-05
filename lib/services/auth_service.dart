@@ -11,6 +11,7 @@ class AuthService {
       password: password,
       data: {
         'role': 'user',
+        'store_id': '1'
       }
     );
 

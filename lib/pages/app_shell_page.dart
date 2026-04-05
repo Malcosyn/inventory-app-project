@@ -5,11 +5,19 @@ import 'package:inventory_app_project/pages/orders/order_page.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
+import 'package:inventory_app_project/widgets/quick_actions_section.dart';
 
 class AppShellPage extends StatefulWidget {
-  const AppShellPage({super.key, this.initialIndex = 0});
+  const AppShellPage({
+    super.key,
+    this.initialIndex = 0,
+    this.initialInventoryQuickAction,
+    this.openOrderComposerOnStart = false,
+  });
 
   final int initialIndex;
+  final InventoryQuickAction? initialInventoryQuickAction;
+  final bool openOrderComposerOnStart;
 
   @override
   State<AppShellPage> createState() => _AppShellPageState();
@@ -17,29 +25,43 @@ class AppShellPage extends StatefulWidget {
 
 class _AppShellPageState extends State<AppShellPage> {
   late int _selectedIndex;
-  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
-    _selectedIndex = widget.initialIndex;
-    _pages = const [
-      HomePage(showBottomNav: false),
-      InventoryPage(showBottomNav: false),
-      OrderPage(showBottomNav: false),
-      StockMovementPage(showBottomNav: false),
-      SettingPage(showBottomNav: false),
-    ];
+    _selectedIndex = widget.initialIndex.clamp(0, 4);
+  }
+
+  @override
+  void didUpdateWidget(covariant AppShellPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialIndex != widget.initialIndex) {
+      _selectedIndex = widget.initialIndex.clamp(0, 4);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      const HomePage(showBottomNav: false),
+      InventoryPage(
+        showBottomNav: false,
+        initialQuickAction: widget.initialInventoryQuickAction,
+      ),
+      OrderPage(
+        showBottomNav: false,
+        openComposerOnStart: widget.openOrderComposerOnStart,
+      ),
+      const StockMovementPage(showBottomNav: false),
+      const SettingPage(showBottomNav: false),
+    ];
+
     return Scaffold(
       body: Stack(
         children: [
           IndexedStack(
             index: _selectedIndex,
-            children: _pages,
+            children: pages,
           ),
           Positioned(
             left: 0,
