@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/category_model.dart';
 import 'package:inventory_app_project/pages/categories/add_category_dialog.dart';
+import 'package:inventory_app_project/pages/categories/edit_category_dialog.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
+import 'package:inventory_app_project/pages/orders/order_page.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/pages/suppliers/suppliers_page.dart';
@@ -14,7 +15,7 @@ import 'package:inventory_app_project/widgets/bottom_navigation.dart';
 class CategoryPage extends StatefulWidget {
   final bool showBottomNav;
 
-  const CategoryPage({super.key, this.showBottomNav = true});
+  const CategoryPage({super.key, this.showBottomNav = false});
 
   @override
   State<CategoryPage> createState() => _CategoryPageState();
@@ -99,49 +100,11 @@ class _CategoryPageState extends State<CategoryPage> {
   }
 
   Future<void> _editCategory(CategoryModel category) async {
-    final controller = TextEditingController(text: category.name);
-    final shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.cardBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text('Edit Category'),
-          contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'Category name',
-              hintText: 'Example: Beverages',
-            ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+    final name = await EditCategoryDialog.show(
+      context,
+      initialName: category.name,
     );
-
-    final name = controller.text.trim();
-    controller.dispose();
-
-    if (shouldSave != true) return;
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Category name is required.')),
-      );
-      return;
-    }
+    if (name == null) return;
 
     try {
       await _categoryService.updateCategory(
@@ -240,15 +203,16 @@ class _CategoryPageState extends State<CategoryPage> {
               SliverToBoxAdapter(child: SizedBox(height: navBarHeight + 16)),
             ],
           ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: BottomNavigation(
-              selectedIndex: _selectedNavIndex,
-              onNavChanged: _onBottomNavChanged,
+          if (widget.showBottomNav)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: BottomNavigation(
+                selectedIndex: _selectedNavIndex,
+                onNavChanged: _onBottomNavChanged,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -276,18 +240,44 @@ class _CategoryPageState extends State<CategoryPage> {
                 child: const Icon(Icons.arrow_back, color: AppColors.textDark),
               ),
               const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Categories',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textDark,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.category_outlined,
+                  color: Color(0xFFC87F2E),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Categories',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textDark,
+                      ),
                     ),
-                  ),
-                ],
+                    Text(
+                      'Store category overview',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: _loadCategories,
+                icon: const Icon(Icons.refresh_rounded),
               ),
             ],
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/services/auth_service.dart';
+import 'package:inventory_app_project/pages/signup_page.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 
 class LoginPage extends StatefulWidget {
@@ -293,9 +294,22 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 16),
             Center(
               child: TextButton(
-                onPressed: isLoading ? null : widget.onSignup,
+                onPressed: isLoading
+                    ? null
+                    : () {
+                        if (widget.onSignup != null) {
+                          widget.onSignup!();
+                          return;
+                        }
+
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SignupPage(),
+                          ),
+                        );
+                      },
                 child: const Text(
-                  'Belum punya akun? Sign up',
+                    'Don\'t have an account? Sign up',
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,

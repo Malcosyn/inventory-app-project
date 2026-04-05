@@ -4,7 +4,9 @@ import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/pages/categories/category_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
+import 'package:inventory_app_project/pages/orders/order_page.dart';
+import 'package:inventory_app_project/pages/products/barcode_scanner_page.dart';
+import 'package:inventory_app_project/pages/products/product_page.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/pages/suppliers/suppliers_page.dart';
@@ -257,10 +259,6 @@ class _HomePageContentState extends State<_HomePageContent> {
   Future<void> _handleQuickAction(InventoryQuickAction action) async {
     switch (action) {
       case InventoryQuickAction.addOrder:
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const OrderPage()),
-        );
-        break;
       case InventoryQuickAction.addItem:
       case InventoryQuickAction.addSupplier:
       case InventoryQuickAction.addCategory:
@@ -273,6 +271,21 @@ class _HomePageContentState extends State<_HomePageContent> {
         );
         break;
     }
+  }
+
+  Future<void> _scanBarcodeQuick() async {
+    final scannedBarcode = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+    );
+
+    final barcode = scannedBarcode?.trim();
+    if (!mounted || barcode == null || barcode.isEmpty) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => InventoryPage(initialSearchQuery: barcode),
+      ),
+    );
   }
 
   @override
@@ -403,7 +416,21 @@ class _HomePageContentState extends State<_HomePageContent> {
                 bg: AppColors.darkSurface,
                 iconColor: Colors.white,
                 hasShadow: true,
-                onTap: () {},
+                onTap: _scanBarcodeQuick,
+              ),
+              _quickActionButton(
+                icon: Icons.inventory_2_outlined,
+                label: 'Products',
+                bg: Colors.white,
+                iconColor: AppColors.textDark,
+                hasBorder: true,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ProductPage(),
+                    ),
+                  );
+                },
               ),
               _quickActionButton(
                 icon: Icons.person_add_outlined,

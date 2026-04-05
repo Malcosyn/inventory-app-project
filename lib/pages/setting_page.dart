@@ -3,7 +3,7 @@ import 'package:inventory_app_project/models/store_model.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
 import 'package:inventory_app_project/pages/login_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
+import 'package:inventory_app_project/pages/orders/order_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/services/store_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
@@ -107,6 +107,13 @@ class _SettingPageState extends State<SettingPage> {
     return normalized[0].toUpperCase() + normalized.substring(1);
   }
 
+  String _profilePhone(User? user) {
+    if (user == null) return '-';
+    final phone = user.userMetadata?['phone']?.toString();
+    if (phone == null || phone.trim().isEmpty) return '-';
+    return phone.trim();
+  }
+
   String _initials(String name) {
     final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
     if (parts.isEmpty) return 'U';
@@ -123,6 +130,243 @@ class _SettingPageState extends State<SettingPage> {
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (route) => false,
     );
+  }
+
+  Future<void> _editProfile() async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    final fullNameController = TextEditingController(
+      text: user.userMetadata?['full_name']?.toString() ?? '',
+    );
+    final emailController = TextEditingController(text: user.email ?? '');
+    final phoneController = TextEditingController(
+      text: user.userMetadata?['phone']?.toString() ?? '',
+    );
+
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('Edit Profile'),
+          contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: fullNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Full name',
+                    hintText: 'Enter your name',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    hintText: 'Enter your email',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                    hintText: 'Enter your phone number',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    final fullName = fullNameController.text.trim();
+    final email = emailController.text.trim();
+    final phone = phoneController.text.trim();
+    fullNameController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+
+    if (shouldSave != true) return;
+    if (fullName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Full name is required.')),
+      );
+      return;
+    }
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Valid email is required.')),
+      );
+      return;
+    }
+
+    try {
+      final normalizedCurrentEmail = (user.email ?? '').trim().toLowerCase();
+      final normalizedNewEmail = email.toLowerCase();
+      final isEmailChanged = normalizedCurrentEmail != normalizedNewEmail;
+
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(data: {
+          ...?user.userMetadata,
+          'full_name': fullName,
+          'phone': phone,
+        }, email: isEmailChanged ? email : null),
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEmailChanged
+                ? 'Profile updated. Check your email to confirm email change.'
+                : 'Profile updated successfully.',
+          ),
+        ),
+      );
+      await _loadProfile();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update profile: $e')),
+      );
+    }
+  }
+
+  Future<void> _editStoreInformation() async {
+    final store = _store;
+    if (store == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No store data available.')),
+      );
+      return;
+    }
+
+    final nameController = TextEditingController(text: store.name);
+    final phoneController = TextEditingController(text: store.phone);
+    final addressController = TextEditingController(text: store.address);
+    var isOpen24H = store.isOpen24H;
+
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.cardBg,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              title: const Text('Edit Store Information'),
+              contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: 'Store name'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(labelText: 'Phone'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: addressController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(labelText: 'Address'),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Open 24 Hours'),
+                      value: isOpen24H,
+                      onChanged: (value) => setDialogState(() => isOpen24H = value),
+                    ),
+                  ],
+                ),
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              actions: [
+                TextButton(
+                  style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    final name = nameController.text.trim();
+    final phone = phoneController.text.trim();
+    final address = addressController.text.trim();
+
+    nameController.dispose();
+    phoneController.dispose();
+    addressController.dispose();
+
+    if (shouldSave != true) return;
+    if (name.isEmpty || phone.isEmpty || address.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Store name, phone, and address are required.')),
+      );
+      return;
+    }
+
+    try {
+      await _storeService.updateStore(
+        StoreModel(
+          id: store.id,
+          ownerId: store.ownerId,
+          name: name,
+          phone: phone,
+          address: address,
+          isOpen24H: isOpen24H,
+          createdAt: store.createdAt,
+        ),
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Store information updated successfully.')),
+      );
+      await _loadProfile();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update store information: $e')),
+      );
+    }
   }
 
   void _onBottomNavChanged(BuildContext context, int index) {
@@ -151,34 +395,38 @@ class _SettingPageState extends State<SettingPage> {
     required IconData icon,
     required String label,
     String? value,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.borderLight)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.textMedium, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textDark,
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppColors.borderLight)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.textMedium, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDark,
+                ),
               ),
             ),
-          ),
-          if (value != null)
-            Text(
-              value,
-              style: const TextStyle(fontSize: 12, color: AppColors.textMedium),
-            ),
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textLight),
-        ],
+            if (value != null)
+              Text(
+                value,
+                style: const TextStyle(fontSize: 12, color: AppColors.textMedium),
+              ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.textLight),
+          ],
+        ),
       ),
     );
   }
@@ -212,6 +460,7 @@ class _SettingPageState extends State<SettingPage> {
     final user = _currentUser;
     final displayName = _displayName(user);
     final roleLabel = _roleLabel(user);
+    final profilePhone = _profilePhone(user);
 
     return RefreshIndicator(
       onRefresh: _loadProfile,
@@ -272,6 +521,11 @@ class _SettingPageState extends State<SettingPage> {
                   roleLabel,
                   style: const TextStyle(fontSize: 13, color: AppColors.textMedium),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  profilePhone == '-' ? 'No phone number' : profilePhone,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textMedium),
+                ),
                 if (user?.email != null) ...[
                   const SizedBox(height: 6),
                   Text(
@@ -325,6 +579,11 @@ class _SettingPageState extends State<SettingPage> {
                         ),
                       ),
                     ),
+                    IconButton(
+                      onPressed: _editStoreInformation,
+                      tooltip: 'Edit store information',
+                      icon: const Icon(Icons.edit_outlined, color: AppColors.textMedium),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -354,7 +613,16 @@ class _SettingPageState extends State<SettingPage> {
             ),
             child: Column(
               children: [
-                _buildSettingsItem(icon: Icons.person_outline_rounded, label: 'Edit Profile'),
+                _buildSettingsItem(
+                  icon: Icons.person_outline_rounded,
+                  label: 'Edit Profile',
+                  onTap: _editProfile,
+                ),
+                _buildSettingsItem(
+                  icon: Icons.storefront_outlined,
+                  label: 'Edit Store Information',
+                  onTap: _editStoreInformation,
+                ),
                 _buildSettingsItem(icon: Icons.shield_outlined, label: 'Security & Privacy'),
                 _buildSettingsItem(
                   icon: Icons.notifications_none_rounded,

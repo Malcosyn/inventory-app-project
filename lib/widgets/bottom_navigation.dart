@@ -71,8 +71,8 @@ class _BottomNavigationState extends State<BottomNavigation> {
             onTap: () => _onTap(1),
           ),
           _NavItem(
-            icon: Icons.shopping_cart_outlined,
-            label: 'Orders',
+            icon: Icons.receipt_long_rounded,
+            label: 'Order',
             index: 2,
             isActive: _currentIndex == 2,
             onTap: () => _onTap(2),

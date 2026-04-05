@@ -3,12 +3,14 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/category_model.dart';
 import 'package:inventory_app_project/models/inventory_model.dart';
+import 'package:inventory_app_project/models/order_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
 import 'package:inventory_app_project/pages/categories/add_category_dialog.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
+import 'package:inventory_app_project/pages/orders/order_page.dart';
+import 'package:inventory_app_project/pages/orders/add_order_dialog.dart';
 import 'package:inventory_app_project/pages/products/add_product_dialog.dart';
 import 'package:inventory_app_project/pages/products/edit_product_dialog.dart';
 import 'package:inventory_app_project/pages/products/product_detail.dart';
@@ -18,6 +20,7 @@ import 'package:inventory_app_project/pages/stock_movements/add_stock_movement_d
 import 'package:inventory_app_project/pages/suppliers/add_supplier_dialog.dart';
 import 'package:inventory_app_project/services/category_service.dart';
 import 'package:inventory_app_project/services/inventory_service.dart';
+import 'package:inventory_app_project/services/order_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
@@ -28,11 +31,17 @@ import 'package:inventory_app_project/widgets/quick_actions_section.dart';
 class InventoryPage extends StatefulWidget {
   final bool showBottomNav;
   final InventoryQuickAction? initialQuickAction;
+  final String? initialSearchQuery;
+  final String? initialStockBarcode;
+  final String? initialOpenProductBarcode;
 
   const InventoryPage({
     super.key,
     this.showBottomNav = true,
     this.initialQuickAction,
+    this.initialSearchQuery,
+    this.initialStockBarcode,
+    this.initialOpenProductBarcode,
   });
 
   @override
@@ -45,6 +54,7 @@ class _InventoryPageState extends State<InventoryPage> {
   final ProductService _productService = ProductService();
   final InventoryService _inventoryService = InventoryService();
   final StockMovementService _stockMovementService = StockMovementService();
+  final OrderService _orderService = OrderService();
   final CategoryService _categoryService = CategoryService();
   final SupplierService _supplierService = SupplierService();
   final ProductService _imageService = ProductService();
@@ -74,6 +84,7 @@ class _InventoryPageState extends State<InventoryPage> {
   String _searchQuery = '';
   String _selectedFilter = 'All Categories';
   bool _didRunInitialQuickAction = false;
+  bool _didOpenInitialProductDetail = false;
 
   List<String> get _filters {
     final names = _categoriesById.values.map((c) => c.name).toList()..sort();
@@ -83,6 +94,11 @@ class _InventoryPageState extends State<InventoryPage> {
   @override
   void initState() {
     super.initState();
+    final initialQuery = widget.initialSearchQuery?.trim() ?? '';
+    if (initialQuery.isNotEmpty) {
+      _searchQuery = initialQuery;
+      _searchController.text = initialQuery;
+    }
     _loadInventory();
   }
 
@@ -153,6 +169,32 @@ class _InventoryPageState extends State<InventoryPage> {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         await _handleQuickAction(widget.initialQuickAction!);
+      });
+    }
+
+    final initialOpenBarcode = widget.initialOpenProductBarcode?.trim() ?? '';
+    if (!_didOpenInitialProductDetail && initialOpenBarcode.isNotEmpty) {
+      _didOpenInitialProductDetail = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+
+        _InventoryItem? matchedItem;
+        for (final item in _items) {
+          final barcode = item.product.barcode?.trim();
+          if (barcode != null && barcode.isNotEmpty && barcode == initialOpenBarcode) {
+            matchedItem = item;
+            break;
+          }
+        }
+
+        if (matchedItem == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Product with barcode "$initialOpenBarcode" not found.')),
+          );
+          return;
+        }
+
+        await _navigateToProductDetail(matchedItem);
       });
     }
   }
@@ -300,12 +342,39 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
-  Future<void> _pickProductForStockChange({required bool isStockIn}) async {
+  Future<void> _pickProductForStockChange({
+    required bool isStockIn,
+    String? preferredBarcode,
+  }) async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No products in inventory yet.')),
       );
       return;
+    }
+
+    final normalizedBarcode = preferredBarcode?.trim();
+    if (normalizedBarcode != null && normalizedBarcode.isNotEmpty) {
+      _InventoryItem? matched;
+      for (final item in _items) {
+        final barcode = item.product.barcode?.trim();
+        if (barcode != null && barcode.isNotEmpty && barcode == normalizedBarcode) {
+          matched = item;
+          break;
+        }
+      }
+
+      if (matched != null) {
+        await _changeStock(item: matched, isStockIn: isStockIn);
+        return;
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Barcode "$normalizedBarcode" not found. Please select product manually.'),
+        ),
+      );
     }
 
     final picked = await showModalBottomSheet<_InventoryItem>(
@@ -350,6 +419,42 @@ class _InventoryPageState extends State<InventoryPage> {
     await _changeStock(item: picked, isStockIn: isStockIn);
   }
 
+  Future<void> _addOrderQuick() async {
+    final products = _items.map((e) => e.product).toList();
+    if (products.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No products available for order.')),
+      );
+      return;
+    }
+
+    final input = await AddOrderDialog.show(context, products: products);
+    if (!mounted || input == null) return;
+
+    try {
+      final order = OrderModel(
+        id: _generateUuidV4(),
+        productId: input.productId,
+        totalPrice: input.totalPrice,
+        totalItem: input.totalItem,
+        status: input.status,
+        unitType: input.unitType,
+        storeId: _defaultStoreId,
+      );
+
+      await _orderService.createOrder(order);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order added successfully.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to add order: $e')),
+      );
+    }
+  }
+
   Future<void> _handleQuickAction(InventoryQuickAction action) async {
     // Let the previous modal route fully settle before showing another route/dialog.
     await WidgetsBinding.instance.endOfFrame;
@@ -366,14 +471,19 @@ class _InventoryPageState extends State<InventoryPage> {
         await _addCategoryQuick();
         break;
       case InventoryQuickAction.addOrder:
-        if (!mounted) return;
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrderPage()));
+        await _addOrderQuick();
         break;
       case InventoryQuickAction.stockIn:
-        await _pickProductForStockChange(isStockIn: true);
+        await _pickProductForStockChange(
+          isStockIn: true,
+          preferredBarcode: widget.initialStockBarcode,
+        );
         break;
       case InventoryQuickAction.stockOut:
-        await _pickProductForStockChange(isStockIn: false);
+        await _pickProductForStockChange(
+          isStockIn: false,
+          preferredBarcode: widget.initialStockBarcode,
+        );
         break;
     }
   }

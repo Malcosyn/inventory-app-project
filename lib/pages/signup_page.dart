@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_app_project/pages/login_page.dart';
 import 'package:inventory_app_project/services/auth_service.dart';
 
 class SignupPage extends StatelessWidget {
@@ -25,7 +26,7 @@ class SignupPage extends StatelessWidget {
               children: [
                 _buildLogoSection(),
                 const SizedBox(height: 32),
-                _buildSignupCard(authService),
+                _buildSignupCard(context, authService),
                 const SizedBox(height: 32),
                 _buildFooterLinks(),
                 const SizedBox(height: 16),
@@ -46,11 +47,7 @@ class SignupPage extends StatelessWidget {
             color: _primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: const Icon(
-            Icons.storefront_outlined,
-            color: _primary,
-            size: 48,
-          ),
+          child: const Icon(Icons.inventory_2_outlined, color: _primary, size: 48),
         ),
         const SizedBox(height: 12),
         const Text(
@@ -66,7 +63,7 @@ class SignupPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSignupCard(AuthService service) {
+  Widget _buildSignupCard(BuildContext context, AuthService service) {
     final TextEditingController _emailController = TextEditingController();
     final TextEditingController _passwordController = TextEditingController();
 
@@ -187,9 +184,15 @@ class SignupPage extends StatelessWidget {
           const SizedBox(height: 16),
           Center(
             child: TextButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const LoginPage(),
+                  ),
+                );
+              },
               child: const Text(
-                'Sudah punya akun? Login',
+                'Already have an account? Log in',
                 style: TextStyle(
                   color: _primary,
                   fontWeight: FontWeight.w700,
@@ -210,12 +213,11 @@ class SignupPage extends StatelessWidget {
         color: _primary.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _primary.withValues(alpha: 0.3)),
-      ),
-      child: const Center(
-        child: Icon(
-          Icons.inventory_2_rounded,
-          size: 40,
-          color: Color(0xFFB7792C),
+        image: const DecorationImage(
+          image: NetworkImage(
+            'https://lh3.googleusercontent.com/aida-public/AB6AXuCSNQbnG71k8XzHn76UxkOztOsy7VtJkdlV7d4F66R9Qhs_t3DrJqIeg4nAGcenL49qudDYJJ4Kwm4asV61QzUv7tpLH6njWbsG7eM1jMXf7bQ4sdHEAL0vtPHjFAVxR1AyCkl2JYsK4bDK6mnYFP-458yub9CsyQZdw5NaD6wa23Ja1eg6rT8heQdfhssuFQ7fvt5CAZymsco7SJYMJ-8ZE_cG49lVpGPyD4uD5vJSxbT_rdjmR4zACSwYXKVebYjVWc-XjeMqAv8',
+          ),
+          fit: BoxFit.cover,
         ),
       ),
     );

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/order_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
+import 'package:inventory_app_project/pages/orders/edit_order_dialog.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/pages/stock_movement_page.dart';
+import 'package:inventory_app_project/services/inventory_service.dart';
 import 'package:inventory_app_project/services/order_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
+import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
 
@@ -21,15 +25,25 @@ class OrderPage extends StatefulWidget {
 
 class _OrderPageState extends State<OrderPage> {
   static const int _defaultStoreId = 1;
+  static const String _allStatusValue = '__all__';
+  static const Map<String, String> _defaultStatusLabels = {
+    'PROCESSING': 'Processing',
+    'SHIPPED': 'Shipped',
+    'DELIVERED': 'Delivered',
+    'CANCELLED': 'Cancelled',
+  };
 
   final OrderService _orderService = OrderService();
   final ProductService _productService = ProductService();
+  final InventoryService _inventoryService = InventoryService();
+  final StockMovementService _stockMovementService = StockMovementService();
 
   bool _isLoading = true;
   String? _error;
   List<OrderModel> _orders = const [];
   Map<String, ProductModel> _productsById = const {};
-  String _selectedStatus = 'All';
+  Map<String, InventoryModel> _inventoriesByProductId = const {};
+  String _selectedStatus = _allStatusValue;
 
   @override
   void initState() {
@@ -47,18 +61,24 @@ class _OrderPageState extends State<OrderPage> {
       final result = await Future.wait([
         _orderService.getOrdersByStoreId(_defaultStoreId),
         _productService.getProductsByStoreId(_defaultStoreId),
+        _inventoryService.getInventoriesByStoreId(_defaultStoreId),
       ]);
 
       if (!mounted) return;
 
       final orders = result[0] as List<OrderModel>;
       final products = result[1] as List<ProductModel>;
+      final inventories = result[2] as List<InventoryModel>;
 
       setState(() {
         _orders = orders;
         _productsById = {for (final p in products) p.id: p};
-        if (_selectedStatus != 'All' && !_statusFilters.contains(_selectedStatus)) {
-          _selectedStatus = 'All';
+        _inventoriesByProductId = {
+          for (final inventory in inventories) inventory.productId: inventory,
+        };
+        final statusValues = _statusFilters.map((s) => s.value).toSet();
+        if (_selectedStatus != _allStatusValue && !statusValues.contains(_selectedStatus)) {
+          _selectedStatus = _allStatusValue;
         }
         _isLoading = false;
       });
@@ -71,15 +91,40 @@ class _OrderPageState extends State<OrderPage> {
     }
   }
 
-  List<String> get _statusFilters {
-    final statuses = _orders.map((e) => e.status.trim()).where((e) => e.isNotEmpty).toSet().toList()
-      ..sort();
-    return <String>['All', ...statuses];
+  List<_StatusFilterOption> get _statusFilters {
+    final normalizedStatusMap = <String, String>{
+      ..._defaultStatusLabels,
+    };
+
+    for (final order in _orders) {
+      final status = order.status.trim().toUpperCase();
+      if (status.isEmpty) continue;
+      normalizedStatusMap.putIfAbsent(status, () => _titleCaseStatus(status));
+    }
+
+    final entries = normalizedStatusMap.entries.toList()
+      ..sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
+
+    return [
+      const _StatusFilterOption(value: _allStatusValue, label: 'All'),
+      ...entries.map((entry) => _StatusFilterOption(value: entry.key, label: entry.value)),
+    ];
+  }
+
+  String _titleCaseStatus(String statusValue) {
+    final words = statusValue.split(RegExp(r'[_\s-]+')).where((w) => w.isNotEmpty);
+    return words
+        .map((word) => '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .toList()
+        .join(' ');
   }
 
   List<OrderModel> get _visibleOrders {
-    if (_selectedStatus == 'All') return _orders;
-    return _orders.where((o) => o.status == _selectedStatus).toList();
+    if (_selectedStatus == _allStatusValue) return _orders;
+    final selectedStatus = _selectedStatus.trim().toUpperCase();
+    return _orders
+        .where((o) => o.status.trim().toUpperCase() == selectedStatus)
+        .toList();
   }
 
   String _formatCurrency(int value) {
@@ -96,11 +141,112 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   Color _statusColor(String status) {
-    final s = status.toLowerCase();
-    if (s.contains('complete') || s.contains('paid')) return const Color(0xFF4D7A35);
-    if (s.contains('pending') || s.contains('process')) return const Color(0xFFB45309);
-    if (s.contains('cancel') || s.contains('fail')) return AppColors.errorText;
+    final s = status.trim().toUpperCase();
+    if (s == 'DELIVERED') return const Color(0xFF4D7A35);
+    if (s == 'PROCESSING' || s == 'SHIPPED') return const Color(0xFFB45309);
+    if (s == 'CANCELLED') return AppColors.errorText;
     return AppColors.textMedium;
+  }
+
+  String _statusLabel(String status) {
+    final value = status.trim().toUpperCase();
+    return _defaultStatusLabels[value] ?? _titleCaseStatus(value);
+  }
+
+  bool _isDeliveredStatus(String status) {
+    return status.trim().toUpperCase() == 'DELIVERED';
+  }
+
+  Future<void> _applyDeliveredStockIn({
+    required String orderId,
+    required String productId,
+    required int quantity,
+    required int storeId,
+  }) async {
+    final currentInventory = _inventoriesByProductId[productId];
+    final stockAfter = (currentInventory?.stockQuantity ?? 0) + quantity;
+
+    if (currentInventory != null) {
+      await _inventoryService.updateInventory(
+        InventoryModel(
+          id: currentInventory.id,
+          productId: currentInventory.productId,
+          costPrice: currentInventory.costPrice,
+          sellingPrice: currentInventory.sellingPrice,
+          stockQuantity: stockAfter,
+          lowStockThreshold: currentInventory.lowStockThreshold,
+          updatedAt: DateTime.now(),
+          storeId: currentInventory.storeId,
+        ),
+      );
+    }
+
+    final shortId = orderId.length > 8 ? orderId.substring(0, 8) : orderId;
+    await _stockMovementService.createStockMovementEntry(
+      productId: productId,
+      type: 'IN',
+      quantity: quantity,
+      stockAfter: stockAfter,
+      reason: null,
+      note: 'Auto stock-in from delivered order #$shortId',
+      storeId: storeId,
+    );
+  }
+
+  Future<void> _editOrder(OrderModel order) async {
+    final products = _productsById.values.toList();
+    if (products.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Product data is not available yet.')),
+      );
+      return;
+    }
+
+    final input = await EditOrderDialog.show(
+      context,
+      products: products,
+      order: order,
+    );
+
+    if (!mounted || input == null) return;
+
+    final wasDelivered = _isDeliveredStatus(order.status);
+    final willBeDelivered = _isDeliveredStatus(input.status);
+
+    try {
+      await _orderService.updateOrder(
+        OrderModel(
+          id: order.id,
+          productId: input.productId,
+          totalPrice: input.totalPrice,
+          totalItem: input.totalItem,
+          status: input.status,
+          unitType: input.unitType,
+          storeId: order.storeId,
+        ),
+      );
+
+      if (!wasDelivered && willBeDelivered) {
+        await _applyDeliveredStockIn(
+          orderId: order.id,
+          productId: input.productId,
+          quantity: input.totalItem,
+          storeId: order.storeId,
+        );
+      }
+
+      if (!mounted) return;
+      final message = (!wasDelivered && willBeDelivered)
+          ? 'Order updated and stock movement IN created.'
+          : 'Order updated successfully.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      await _loadOrders();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update order: $e')),
+      );
+    }
   }
 
   void _onBottomNavChanged(BuildContext context, int index) {
@@ -193,9 +339,33 @@ class _OrderPageState extends State<OrderPage> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  order.status,
+                  _statusLabel(order.status),
                   style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
                 ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _editOrder(order);
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem<String>(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
+                ],
+                icon: const Icon(Icons.more_horiz_rounded),
+                color: Colors.white,
+                surfaceTintColor: Colors.white,
+                iconColor: AppColors.textMedium,
+                tooltip: 'Order options',
               ),
             ],
           ),
@@ -293,14 +463,14 @@ class _OrderPageState extends State<OrderPage> {
             height: 36,
             child: ListView(
               scrollDirection: Axis.horizontal,
-              children: _statusFilters.map((status) {
-                final selected = _selectedStatus == status;
+              children: _statusFilters.map((statusOption) {
+                final selected = _selectedStatus == statusOption.value;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
-                    label: Text(status),
+                    label: Text(statusOption.label),
                     selected: selected,
-                    onSelected: (_) => setState(() => _selectedStatus = status),
+                    onSelected: (_) => setState(() => _selectedStatus = statusOption.value),
                     selectedColor: AppColors.primary.withValues(alpha: 0.25),
                     backgroundColor: Colors.white,
                     side: BorderSide(
@@ -375,4 +545,11 @@ class _Metric extends StatelessWidget {
       ],
     );
   }
+}
+
+class _StatusFilterOption {
+  final String value;
+  final String label;
+
+  const _StatusFilterOption({required this.value, required this.label});
 }

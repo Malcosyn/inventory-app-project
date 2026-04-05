@@ -3,7 +3,8 @@ import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
-import 'package:inventory_app_project/pages/order_page.dart';
+import 'package:inventory_app_project/pages/orders/order_page.dart';
+import 'package:inventory_app_project/pages/products/barcode_scanner_page.dart';
 import 'package:inventory_app_project/pages/setting_page.dart';
 import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
@@ -107,6 +108,25 @@ class _StockMovementPageState extends State<StockMovementPage> {
     );
   }
 
+  Future<void> _scanToAdjustStockIn() async {
+    final barcode = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+    );
+
+    if (!mounted) return;
+    final normalizedBarcode = barcode?.trim();
+    if (normalizedBarcode == null || normalizedBarcode.isEmpty) return;
+
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => InventoryPage(
+          initialSearchQuery: normalizedBarcode,
+          initialOpenProductBarcode: normalizedBarcode,
+        ),
+      ),
+    );
+  }
+
   void _onBottomNavChanged(BuildContext context, int index) {
     final Widget page;
     switch (index) {
@@ -161,7 +181,7 @@ class _StockMovementPageState extends State<StockMovementPage> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: () => _openStockAction(true),
+        onPressed: _scanToAdjustStockIn,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.darkSurface,
           foregroundColor: Colors.white,
