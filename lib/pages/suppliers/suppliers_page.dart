@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
+import 'package:inventory_app_project/pages/home_page.dart';
+import 'package:inventory_app_project/pages/inventory_page.dart';
+import 'package:inventory_app_project/pages/orders/order_page.dart';
+import 'package:inventory_app_project/pages/setting_page.dart';
+import 'package:inventory_app_project/pages/stock_movement_page.dart';
 import 'package:inventory_app_project/pages/suppliers/add_supplier_dialog.dart';
+import 'package:inventory_app_project/pages/suppliers/edit_supplier_dialog.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
+import 'package:inventory_app_project/widgets/bottom_navigation.dart';
 
 class SuppliersPage extends StatefulWidget {
   final bool showBottomNav;
 
-  const SuppliersPage({super.key, this.showBottomNav = true});
+  const SuppliersPage({super.key, this.showBottomNav = false});
 
   @override
   State<SuppliersPage> createState() => _SuppliersPageState();
@@ -18,6 +25,7 @@ class _SuppliersPageState extends State<SuppliersPage> {
 
   final SupplierService _supplierService = SupplierService();
 
+  int _selectedNavIndex = 4;
   bool _isLoading = true;
   String? _error;
   List<SupplierModel> _suppliers = const [];
@@ -61,6 +69,30 @@ class _SuppliersPageState extends State<SuppliersPage> {
         .toList();
   }
 
+  void _onBottomNavChanged(int index) {
+    if (index == _selectedNavIndex) return;
+
+    final Widget page;
+    switch (index) {
+      case 0:
+        page = const HomePage();
+      case 1:
+        page = const InventoryPage();
+      case 2:
+        page = const OrderPage();
+      case 3:
+        page = const StockMovementPage();
+      case 4:
+        page = const SuppliersPage();
+      case 5:
+        page = const SettingPage();
+      default:
+        return;
+    }
+
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => page));
+  }
+
   Future<void> _addSupplier() async {
     final result = await AddSupplierDialog.show(context);
     if (result != null) {
@@ -69,94 +101,23 @@ class _SuppliersPageState extends State<SuppliersPage> {
   }
 
   Future<void> _editSupplier(SupplierModel supplier) async {
-    final nameController = TextEditingController(text: supplier.name);
-    final phoneController = TextEditingController(text: supplier.phone);
-    final addressController = TextEditingController(text: supplier.address);
-    final emailController = TextEditingController(text: supplier.email ?? '');
-
-    final shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.cardBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text('Edit Supplier'),
-          contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Supplier name',
-                    hintText: 'Example: ABC Supplier',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: addressController,
-                  decoration: const InputDecoration(labelText: 'Address'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email (optional)'),
-                ),
-              ],
-            ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+    final result = await EditSupplierDialog.show(
+      context,
+      initialName: supplier.name,
+      initialPhone: supplier.phone,
+      initialAddress: supplier.address,
+      initialEmail: supplier.email,
     );
-
-    final name = nameController.text.trim();
-    final phone = phoneController.text.trim();
-    final address = addressController.text.trim();
-    final email = emailController.text.trim();
-
-    nameController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
-    emailController.dispose();
-
-    if (shouldSave != true) return;
-
-    if (name.isEmpty || phone.isEmpty || address.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name, phone, and address are required.')),
-      );
-      return;
-    }
+    if (result == null) return;
 
     try {
       await _supplierService.updateSupplier(
         SupplierModel(
           id: supplier.id,
-          name: name,
-          phone: phone,
-          address: address,
-          email: email.isEmpty ? null : email,
+          name: result.name,
+          phone: result.phone,
+          address: result.address,
+          email: result.email,
           storeId: supplier.storeId,
         ),
       );
@@ -214,6 +175,8 @@ class _SuppliersPageState extends State<SuppliersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final navBarHeight = BottomNavigation.heightFor(context);
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       floatingActionButton: FloatingActionButton(
@@ -244,13 +207,19 @@ class _SuppliersPageState extends State<SuppliersPage> {
                     childCount: _visibleSuppliers.length,
                   ),
                 ),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: MediaQuery.of(context).padding.bottom + 16,
-                ),
-              ),
+              SliverToBoxAdapter(child: SizedBox(height: navBarHeight + 16)),
             ],
           ),
+          if (widget.showBottomNav)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: BottomNavigation(
+                selectedIndex: _selectedNavIndex,
+                onNavChanged: _onBottomNavChanged,
+              ),
+            ),
         ],
       ),
     );
@@ -278,18 +247,44 @@ class _SuppliersPageState extends State<SuppliersPage> {
                 child: const Icon(Icons.arrow_back, color: AppColors.textDark),
               ),
               const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'My Suppliers',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textDark,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.local_shipping_outlined,
+                  color: Color(0xFFC87F2E),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'My Suppliers',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textDark,
+                      ),
                     ),
-                  ),
-                ],
+                    Text(
+                      'Store supplier overview',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: _loadSuppliers,
+                icon: const Icon(Icons.refresh_rounded),
               ),
             ],
           ),

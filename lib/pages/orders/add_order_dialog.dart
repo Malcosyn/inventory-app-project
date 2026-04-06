@@ -1,368 +1,220 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 
-class AddOrderProductOption {
-  final String productId;
-  final String productName;
-  final int currentStock;
-  final int unitPrice;
-
-  const AddOrderProductOption({
-    required this.productId,
-    required this.productName,
-    required this.currentStock,
-    required this.unitPrice,
-  });
-}
-
 class AddOrderInput {
-  final String productId;
-  final int quantity;
-  final String status;
-  final String unitType;
+	final String productId;
+	final int totalPrice;
+	final int totalItem;
+	final String status;
+	final String unitType;
 
-  const AddOrderInput({
-    required this.productId,
-    required this.quantity,
-    required this.status,
-    required this.unitType,
-  });
+	const AddOrderInput({
+		required this.productId,
+		required this.totalPrice,
+		required this.totalItem,
+		required this.status,
+		required this.unitType,
+	});
 }
 
-class AddOrderDialog {
-  static const List<String> _statuses = <String>[
-    'PROCESSING',
-    'SHIPPED',
-    'DELIVERED',
-    'CANCELLED',
-  ];
+class AddOrderDialog extends StatefulWidget {
+	final List<ProductModel> products;
 
-  static const List<String> _unitTypes = <String>[
-    'pcs',
-    'pack',
-    'box',
-    'unit',
-  ];
+	const AddOrderDialog({super.key, required this.products});
 
-  static Future<AddOrderInput?> show(
-    BuildContext context, {
-    required List<AddOrderProductOption> products,
-    AddOrderInput? initialValue,
-    bool allowProductChange = true,
-    String title = 'Add Purchase Order',
-    String subtitle = 'Record incoming stock from supplier',
-    String confirmLabel = 'Create',
-  }) async {
-    if (products.isEmpty) {
-      return null;
-    }
+	static Future<AddOrderInput?> show(
+		BuildContext context, {
+		required List<ProductModel> products,
+	}) {
+		return showDialog<AddOrderInput>(
+			context: context,
+			builder: (_) => AddOrderDialog(products: products),
+		);
+	}
 
-    String? selectedProductId = initialValue?.productId ?? products.first.productId;
-    final quantityController = TextEditingController(
-      text: (initialValue?.quantity ?? 1).toString(),
-    );
-    String selectedStatus = initialValue?.status ?? _statuses.first;
-    String selectedUnitType = initialValue?.unitType ?? _unitTypes.first;
-    String? errorText;
-
-    final input = await showModalBottomSheet<AddOrderInput>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            AddOrderProductOption selectedProduct = products.firstWhere(
-              (product) => product.productId == selectedProductId,
-              orElse: () => products.first,
-            );
-
-            String formatCurrency(int value) {
-              final text = value.toString();
-              final buffer = StringBuffer();
-              for (int i = 0; i < text.length; i++) {
-                final pos = text.length - i;
-                buffer.write(text[i]);
-                if (pos > 1 && pos % 3 == 1) {
-                  buffer.write('.');
-                }
-              }
-              return 'Rp$buffer';
-            }
-
-            return SafeArea(
-              top: false,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 16,
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.cardBg,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  padding: const EdgeInsets.all(18),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.25),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.receipt_long_rounded,
-                                color: Color(0xFFC87F2E),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.textDark,
-                                    ),
-                                  ),
-                                  Text(
-                                    subtitle,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textMedium,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-                        if (allowProductChange)
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedProductId,
-                            decoration: const InputDecoration(
-                              labelText: 'Product',
-                            ),
-                            items: products
-                                .map(
-                                  (product) => DropdownMenuItem<String>(
-                                    value: product.productId,
-                                    child: Text(product.productName),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setModalState(() {
-                                selectedProductId = value;
-                                errorText = null;
-                              });
-                            },
-                          )
-                        else
-                          InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: 'Product',
-                            ),
-                            child: Text(
-                              selectedProduct.productName,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textDark,
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.backgroundLight,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.borderColor),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: _OrderMetric(
-                                  label: 'Current Stock',
-                                  value: '${selectedProduct.currentStock} pcs',
-                                ),
-                              ),
-                              Expanded(
-                                child: _OrderMetric(
-                                  label: 'Unit Cost',
-                                  value: formatCurrency(selectedProduct.unitPrice),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: quantityController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          decoration: const InputDecoration(
-                            labelText: 'Quantity',
-                            hintText: 'Enter quantity',
-                          ),
-                          onChanged: (_) {
-                            if (errorText == null) return;
-                            setModalState(() => errorText = null);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: selectedStatus,
-                          decoration: const InputDecoration(
-                            labelText: 'Status',
-                          ),
-                          items: _statuses
-                              .map(
-                                (status) => DropdownMenuItem<String>(
-                                  value: status,
-                                  child: Text(status),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setModalState(() => selectedStatus = value);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: selectedUnitType,
-                          decoration: const InputDecoration(
-                            labelText: 'Unit Type',
-                          ),
-                          items: _unitTypes
-                              .map(
-                                (unit) => DropdownMenuItem<String>(
-                                  value: unit,
-                                  child: Text(unit),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setModalState(() => selectedUnitType = value);
-                          },
-                        ),
-                        if (errorText != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            errorText!,
-                            style: const TextStyle(
-                              color: AppColors.errorText,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 18),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: const Text('Cancel'),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                ),
-                                onPressed: () {
-                                  final quantity =
-                                      int.tryParse(quantityController.text.trim()) ?? 0;
-                                  if (quantity <= 0) {
-                                    setModalState(() {
-                                      errorText = 'Quantity must be greater than zero.';
-                                    });
-                                    return;
-                                  }
-
-                                  Navigator.of(context).pop(
-                                    AddOrderInput(
-                                      productId: selectedProduct.productId,
-                                      quantity: quantity,
-                                      status: selectedStatus,
-                                      unitType: selectedUnitType,
-                                    ),
-                                  );
-                                },
-                                child: Text(confirmLabel),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    quantityController.dispose();
-    return input;
-  }
+	@override
+	State<AddOrderDialog> createState() => _AddOrderDialogState();
 }
 
-class _OrderMetric extends StatelessWidget {
-  final String label;
-  final String value;
+class _AddOrderDialogState extends State<AddOrderDialog> {
+	static const List<_StatusOption> _statusOptions = [
+		_StatusOption(label: 'Processing', value: 'PROCESSING'),
+		_StatusOption(label: 'Shipped', value: 'SHIPPED'),
+		_StatusOption(label: 'Delivered', value: 'DELIVERED'),
+		_StatusOption(label: 'Cancelled', value: 'CANCELLED'),
+	];
+	static const List<String> _unitTypeOptions = [
+		'pcs',
+		'box',
+		'pack',
+		'kg',
+		'liter',
+	];
 
-  const _OrderMetric({
-    required this.label,
-    required this.value,
-  });
+	final TextEditingController _totalItemController = TextEditingController();
+	final TextEditingController _totalPriceController = TextEditingController();
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: AppColors.textMedium,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textDark,
-          ),
-        ),
-      ],
-    );
-  }
+	String? _selectedProductId;
+	String _selectedStatus = _statusOptions.first.value;
+	String _selectedUnitType = _unitTypeOptions.first;
+
+	@override
+	void initState() {
+		super.initState();
+		if (widget.products.isNotEmpty) {
+			_selectedProductId = widget.products.first.id;
+		}
+	}
+
+	@override
+	void dispose() {
+		_totalItemController.dispose();
+		_totalPriceController.dispose();
+		super.dispose();
+	}
+
+	void _save() {
+		final productId = _selectedProductId;
+		final totalItem = int.tryParse(_totalItemController.text.trim()) ?? 0;
+		final totalPrice = int.tryParse(_totalPriceController.text.trim()) ?? 0;
+
+		if (productId == null || productId.isEmpty) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Please select a product.')),
+			);
+			return;
+		}
+
+		if (totalItem <= 0 || totalPrice <= 0) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Total item and total price must be greater than zero.')),
+			);
+			return;
+		}
+
+		Navigator.of(context).pop(
+			AddOrderInput(
+				productId: productId,
+				totalPrice: totalPrice,
+				totalItem: totalItem,
+				status: _selectedStatus,
+				unitType: _selectedUnitType,
+			),
+		);
+	}
+
+	@override
+	Widget build(BuildContext context) {
+		return AlertDialog(
+			backgroundColor: AppColors.cardBg,
+			shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+			title: const Text('Add Order'),
+			contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+			content: SingleChildScrollView(
+				child: Column(
+					mainAxisSize: MainAxisSize.min,
+					children: [
+						DropdownButtonFormField<String>(
+							value: _selectedProductId,
+							isExpanded: true,
+							decoration: const InputDecoration(labelText: 'Product'),
+							items: widget.products
+									.map(
+										(product) => DropdownMenuItem<String>(
+											value: product.id,
+											child: Text(
+												product.name,
+												overflow: TextOverflow.ellipsis,
+											),
+										),
+									)
+									.toList(),
+							onChanged: (value) {
+								setState(() {
+									_selectedProductId = value;
+								});
+							},
+						),
+						const SizedBox(height: 8),
+						TextField(
+							controller: _totalItemController,
+							keyboardType: TextInputType.number,
+							decoration: const InputDecoration(
+								labelText: 'Total item',
+								hintText: 'Example: 12',
+							),
+						),
+						const SizedBox(height: 8),
+						DropdownButtonFormField<String>(
+							value: _selectedUnitType,
+							decoration: const InputDecoration(labelText: 'Unit type'),
+							items: _unitTypeOptions
+									.map(
+										(unit) => DropdownMenuItem<String>(
+											value: unit,
+											child: Text(unit),
+										),
+									)
+									.toList(),
+							onChanged: (value) {
+								if (value == null) return;
+								setState(() {
+									_selectedUnitType = value;
+								});
+							},
+						),
+						const SizedBox(height: 8),
+						TextField(
+							controller: _totalPriceController,
+							keyboardType: TextInputType.number,
+							decoration: const InputDecoration(
+								labelText: 'Total price',
+								hintText: 'Example: 50000',
+							),
+						),
+						const SizedBox(height: 8),
+						DropdownButtonFormField<String>(
+							value: _selectedStatus,
+							decoration: const InputDecoration(labelText: 'Status'),
+							items: _statusOptions
+									.map(
+										(option) => DropdownMenuItem<String>(
+											value: option.value,
+											child: Text(option.label),
+										),
+									)
+									.toList(),
+							onChanged: (value) {
+								if (value == null) return;
+								setState(() {
+									_selectedStatus = value;
+								});
+							},
+						),
+					],
+				),
+			),
+			actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+			actions: [
+				TextButton(
+					style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
+					onPressed: () => Navigator.of(context).pop(),
+					child: const Text('Cancel'),
+				),
+				FilledButton(
+					style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+					onPressed: _save,
+					child: const Text('Save'),
+				),
+			],
+		);
+	}
+}
+
+class _StatusOption {
+	final String label;
+	final String value;
+
+	const _StatusOption({required this.label, required this.value});
 }

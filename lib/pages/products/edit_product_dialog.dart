@@ -286,7 +286,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         child: Material(
-            color: AppColors.backgroundLight,
+          color: AppColors.cardBg,
           child: Column(
             children: [
               _TopBar(onClose: () => Navigator.of(context).pop(false)),
@@ -441,7 +441,7 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-        color: AppColors.backgroundLight,
+      color: AppColors.cardBg,
       elevation: 1,
       shadowColor: Colors.black12,
       child: Padding(
@@ -582,7 +582,7 @@ class _InputField extends StatelessWidget {
       ),
       decoration: InputDecoration(
         filled: true,
-          fillColor: AppColors.backgroundAlt,
+          fillColor: Colors.white,
         hintText: required ? '$hint *' : hint,
         hintStyle: const TextStyle(
             color: AppColors.textLight,
@@ -641,7 +641,7 @@ class _SelectField<T> extends StatelessWidget {
       dropdownColor: AppColors.cardBg,
       decoration: InputDecoration(
         filled: true,
-        fillColor: AppColors.backgroundAlt,
+        fillColor: Colors.white,
         hintText: hint,
         hintStyle: const TextStyle(
             color: AppColors.textLight,
@@ -682,7 +682,7 @@ class _ImageHero extends StatelessWidget {
       child: Container(
         height: 220,
         decoration: BoxDecoration(
-            color: AppColors.backgroundAlt,
+          color: AppColors.cardBg,
           borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppColors.borderColor),
         ),

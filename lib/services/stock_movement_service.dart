@@ -11,7 +11,7 @@ class StockMovementService {
     required String type,
     required int quantity,
     required int stockAfter,
-    required String reason,
+    String? reason,
     required String note,
     required int storeId,
   }) async {
