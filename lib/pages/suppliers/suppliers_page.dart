@@ -10,6 +10,7 @@ import 'package:inventory_app_project/pages/suppliers/edit_supplier_dialog.dart'
 import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
+import 'package:inventory_app_project/widgets/page_loading_view.dart';
 
 class SuppliersPage extends StatefulWidget {
   final bool showBottomNav;
@@ -44,7 +45,9 @@ class _SuppliersPageState extends State<SuppliersPage> {
     });
 
     try {
-      final suppliers = await _supplierService.getSuppliersByStoreId(_defaultStoreId);
+      final suppliers = await _supplierService.getSuppliersByStoreId(
+        _defaultStoreId,
+      );
       if (!mounted) return;
 
       setState(() {
@@ -63,9 +66,12 @@ class _SuppliersPageState extends State<SuppliersPage> {
   List<SupplierModel> get _visibleSuppliers {
     if (_searchQuery.isEmpty) return _suppliers;
     return _suppliers
-        .where((s) => s.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            s.phone.contains(_searchQuery) ||
-            s.address.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .where(
+          (s) =>
+              s.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              s.phone.contains(_searchQuery) ||
+              s.address.toLowerCase().contains(_searchQuery.toLowerCase()),
+        )
         .toList();
   }
 
@@ -90,7 +96,9 @@ class _SuppliersPageState extends State<SuppliersPage> {
         return;
     }
 
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
   }
 
   Future<void> _addSupplier() async {
@@ -128,9 +136,9 @@ class _SuppliersPageState extends State<SuppliersPage> {
       await _loadSuppliers();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update supplier: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update supplier: $e')));
     }
   }
 
@@ -167,9 +175,9 @@ class _SuppliersPageState extends State<SuppliersPage> {
       await _loadSuppliers();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete supplier: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete supplier: $e')));
     }
   }
 
@@ -193,10 +201,7 @@ class _SuppliersPageState extends State<SuppliersPage> {
               if (_error != null) SliverToBoxAdapter(child: _buildError()),
               if (_isLoading)
                 const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(),
-                  ),
+                  child: PageLoadingView(itemCount: 4, topPadding: 16),
                 )
               else if (_visibleSuppliers.isEmpty)
                 SliverToBoxAdapter(child: _buildEmpty())
@@ -282,10 +287,6 @@ class _SuppliersPageState extends State<SuppliersPage> {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: _loadSuppliers,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
             ],
           ),
         ],
@@ -307,7 +308,10 @@ class _SuppliersPageState extends State<SuppliersPage> {
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.borderColor),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -328,12 +332,20 @@ class _SuppliersPageState extends State<SuppliersPage> {
           children: [
             const Row(
               children: [
-                Icon(Icons.error_outline_rounded, color: AppColors.errorText, size: 18),
+                Icon(
+                  Icons.error_outline_rounded,
+                  color: AppColors.errorText,
+                  size: 18,
+                ),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Failed to load suppliers',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.errorDark),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.errorDark,
+                    ),
                   ),
                 ),
               ],
@@ -377,10 +389,7 @@ class _SuppliersPageState extends State<SuppliersPage> {
             child: Text(
               'Add your first supplier to get started',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textMedium,
-              ),
+              style: TextStyle(fontSize: 13, color: AppColors.textMedium),
             ),
           ),
         ],
@@ -470,9 +479,16 @@ class _SuppliersPageState extends State<SuppliersPage> {
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFDC2626)),
+                          Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                            color: Color(0xFFDC2626),
+                          ),
                           SizedBox(width: 8),
-                          Text('Delete', style: TextStyle(color: Color(0xFFDC2626))),
+                          Text(
+                            'Delete',
+                            style: TextStyle(color: Color(0xFFDC2626)),
+                          ),
                         ],
                       ),
                     ),
@@ -488,7 +504,11 @@ class _SuppliersPageState extends State<SuppliersPage> {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined, size: 16, color: AppColors.textMedium),
+                const Icon(
+                  Icons.location_on_outlined,
+                  size: 16,
+                  color: AppColors.textMedium,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -507,7 +527,11 @@ class _SuppliersPageState extends State<SuppliersPage> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.email_outlined, size: 16, color: AppColors.textMedium),
+                  const Icon(
+                    Icons.email_outlined,
+                    size: 16,
+                    color: AppColors.textMedium,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(

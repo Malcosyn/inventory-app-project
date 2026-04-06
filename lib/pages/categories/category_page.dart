@@ -11,6 +11,7 @@ import 'package:inventory_app_project/pages/suppliers/suppliers_page.dart';
 import 'package:inventory_app_project/services/category_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
+import 'package:inventory_app_project/widgets/page_loading_view.dart';
 
 class CategoryPage extends StatefulWidget {
   final bool showBottomNav;
@@ -45,7 +46,9 @@ class _CategoryPageState extends State<CategoryPage> {
     });
 
     try {
-      final categories = await _categoryService.getCategoriesByStoreId(_defaultStoreId);
+      final categories = await _categoryService.getCategoriesByStoreId(
+        _defaultStoreId,
+      );
       if (!mounted) return;
 
       setState(() {
@@ -89,13 +92,37 @@ class _CategoryPageState extends State<CategoryPage> {
         return;
     }
 
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
   }
 
   Future<void> _addCategory() async {
-    final result = await AddCategoryDialog.show(context);
-    if (result != null && result.isNotEmpty) {
-      _loadCategories();
+    final name = await AddCategoryDialog.show(context);
+    if (!mounted || name == null) return;
+
+    try {
+      final existing = await _categoryService.getCategoriesByStoreId(
+        _defaultStoreId,
+      );
+      final maxId = existing.isEmpty
+          ? 0
+          : existing.map((c) => c.id).reduce((a, b) => a > b ? a : b);
+
+      await _categoryService.createCategory(
+        CategoryModel(id: maxId + 1, storeId: _defaultStoreId, name: name),
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Category added successfully.')),
+      );
+      await _loadCategories();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to add category: $e')));
     }
   }
 
@@ -108,11 +135,7 @@ class _CategoryPageState extends State<CategoryPage> {
 
     try {
       await _categoryService.updateCategory(
-        CategoryModel(
-          id: category.id,
-          storeId: category.storeId,
-          name: name,
-        ),
+        CategoryModel(id: category.id, storeId: category.storeId, name: name),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -121,9 +144,9 @@ class _CategoryPageState extends State<CategoryPage> {
       await _loadCategories();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update category: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update category: $e')));
     }
   }
 
@@ -160,9 +183,9 @@ class _CategoryPageState extends State<CategoryPage> {
       await _loadCategories();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete category: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete category: $e')));
     }
   }
 
@@ -186,10 +209,7 @@ class _CategoryPageState extends State<CategoryPage> {
               if (_error != null) SliverToBoxAdapter(child: _buildError()),
               if (_isLoading)
                 const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(),
-                  ),
+                  child: PageLoadingView(itemCount: 4, topPadding: 16),
                 )
               else if (_visibleCategories.isEmpty)
                 SliverToBoxAdapter(child: _buildEmpty())
@@ -275,10 +295,6 @@ class _CategoryPageState extends State<CategoryPage> {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: _loadCategories,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
             ],
           ),
         ],
@@ -300,7 +316,10 @@ class _CategoryPageState extends State<CategoryPage> {
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.borderColor),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -321,12 +340,20 @@ class _CategoryPageState extends State<CategoryPage> {
           children: [
             const Row(
               children: [
-                Icon(Icons.error_outline_rounded, color: AppColors.errorText, size: 18),
+                Icon(
+                  Icons.error_outline_rounded,
+                  color: AppColors.errorText,
+                  size: 18,
+                ),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Failed to load categories',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.errorDark),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.errorDark,
+                    ),
                   ),
                 ),
               ],
@@ -350,11 +377,7 @@ class _CategoryPageState extends State<CategoryPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.category_outlined,
-            size: 80,
-            color: AppColors.borderColor,
-          ),
+          Icon(Icons.category_outlined, size: 80, color: AppColors.borderColor),
           const SizedBox(height: 16),
           const Text(
             'No Categories Yet',
@@ -370,10 +393,7 @@ class _CategoryPageState extends State<CategoryPage> {
             child: Text(
               'Add your first category to get started',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textMedium,
-              ),
+              style: TextStyle(fontSize: 13, color: AppColors.textMedium),
             ),
           ),
         ],
@@ -460,9 +480,16 @@ class _CategoryPageState extends State<CategoryPage> {
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFDC2626)),
+                      Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: Color(0xFFDC2626),
+                      ),
                       SizedBox(width: 8),
-                      Text('Delete', style: TextStyle(color: Color(0xFFDC2626))),
+                      Text(
+                        'Delete',
+                        style: TextStyle(color: Color(0xFFDC2626)),
+                      ),
                     ],
                   ),
                 ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/pages/categories/category_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
 import 'package:inventory_app_project/pages/orders/order_page.dart';
@@ -19,19 +20,27 @@ import 'package:inventory_app_project/widgets/quick_actions_section.dart';
 
 class HomePage extends StatelessWidget {
   final bool showBottomNav;
+  final int refreshTick;
 
-  const HomePage({super.key, this.showBottomNav = true});
+  const HomePage({super.key, this.showBottomNav = true, this.refreshTick = 0});
 
   @override
   Widget build(BuildContext context) {
-    return _HomePageContent(showBottomNav: showBottomNav);
+    return _HomePageContent(
+      showBottomNav: showBottomNav,
+      refreshTick: refreshTick,
+    );
   }
 }
 
 class _HomePageContent extends StatefulWidget {
   final bool showBottomNav;
+  final int refreshTick;
 
-  const _HomePageContent({required this.showBottomNav});
+  const _HomePageContent({
+    required this.showBottomNav,
+    required this.refreshTick,
+  });
 
   @override
   State<_HomePageContent> createState() => _HomePageContentState();
@@ -114,8 +123,11 @@ class _HomePageContentState extends State<_HomePageContent> {
       final local = movement.createdAt.toLocal();
       final day = DateTime(local.year, local.month, local.day);
       if (day.isBefore(start) || day.isAfter(today)) continue;
-      totalsByDay.update(day, (value) => value + movement.quantity,
-          ifAbsent: () => movement.quantity);
+      totalsByDay.update(
+        day,
+        (value) => value + movement.quantity,
+        ifAbsent: () => movement.quantity,
+      );
     }
 
     final bucketSize = (days / bucketCount).ceil();
@@ -143,19 +155,22 @@ class _HomePageContentState extends State<_HomePageContent> {
       }
 
       bucketValues.add(total);
-      bucketLabels.add(days == 7
-          ? _weekdayShort(bucketStart.weekday)
-          : '${bucketStart.day}/${bucketStart.month}');
+      bucketLabels.add(
+        days == 7
+            ? _weekdayShort(bucketStart.weekday)
+            : '${bucketStart.day}/${bucketStart.month}',
+      );
     }
 
-    final maxValue = bucketValues.fold<int>(0, (max, value) => value > max ? value : max);
-    final bars = bucketValues
-        .map((value) {
-          if (maxValue == 0) return 0.0;
-          final fraction = value / maxValue;
-          return value > 0 ? fraction.clamp(0.12, 1.0) : 0.0;
-        })
-        .toList();
+    final maxValue = bucketValues.fold<int>(
+      0,
+      (max, value) => value > max ? value : max,
+    );
+    final bars = bucketValues.map((value) {
+      if (maxValue == 0) return 0.0;
+      final fraction = value / maxValue;
+      return value > 0 ? fraction.clamp(0.12, 1.0) : 0.0;
+    }).toList();
 
     return _TrendData(bars: bars, labels: bucketLabels);
   }
@@ -189,29 +204,23 @@ class _HomePageContentState extends State<_HomePageContent> {
       return;
     }
 
-    final Widget page;
-    switch (index) {
-      case 1:
-        page = const InventoryPage();
-      case 2:
-        page = const OrderPage();
-      case 3:
-        page = const StockMovementPage();
-      case 4:
-        page = const SettingPage();
-      default:
-        return;
-    }
-
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => AppShellPage(initialIndex: index)),
+    );
   }
 
   @override
   void initState() {
     super.initState();
     _loadHomeSummary();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomePageContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshTick != widget.refreshTick) {
+      _loadHomeSummary();
+    }
   }
 
   Future<void> _loadHomeSummary() async {
@@ -232,7 +241,9 @@ class _HomePageContentState extends State<_HomePageContent> {
     }
 
     try {
-      inventories = await _inventoryService.getInventoriesByStoreId(_defaultStoreId);
+      inventories = await _inventoryService.getInventoriesByStoreId(
+        _defaultStoreId,
+      );
     } catch (e) {
       errors.add('inventories: $e');
     }
@@ -405,7 +416,9 @@ class _HomePageContentState extends State<_HomePageContent> {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => InventoryPage(initialQuickAction: InventoryQuickAction.addItem),
+                      builder: (_) => InventoryPage(
+                        initialQuickAction: InventoryQuickAction.addItem,
+                      ),
                     ),
                   );
                 },
@@ -426,9 +439,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                 hasBorder: true,
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ProductPage(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const ProductPage()),
                   );
                 },
               ),
@@ -440,9 +451,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                 hasBorder: true,
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SuppliersPage(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const SuppliersPage()),
                   );
                 },
               ),
@@ -454,21 +463,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                 hasBorder: true,
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CategoryPage(),
-                    ),
-                  );
-                },
-              ),
-              _quickActionButton(
-                icon: Icons.receipt_long_outlined,
-                label: 'Order',
-                bg: Colors.white,
-                iconColor: AppColors.textDark,
-                hasBorder: true,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const OrderPage()),
+                    MaterialPageRoute(builder: (_) => const CategoryPage()),
                   );
                 },
               ),
@@ -499,7 +494,9 @@ class _HomePageContentState extends State<_HomePageContent> {
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.circular(14),
-              border: hasBorder ? Border.all(color: AppColors.borderColor) : null,
+              border: hasBorder
+                  ? Border.all(color: AppColors.borderColor)
+                  : null,
               boxShadow: hasShadow
                   ? [
                       BoxShadow(
@@ -562,7 +559,7 @@ class _HomePageContentState extends State<_HomePageContent> {
   Widget _buildInventorySummary() {
     final totalProducts = _products.length;
     final lowStockItems = _inventories
-        .where((inv) => inv.stockQuantity < inv.lowStockThreshold)
+        .where((inv) => inv.stockQuantity <= inv.lowStockThreshold)
         .length;
     final todayTransactions = _todayTransactions;
 

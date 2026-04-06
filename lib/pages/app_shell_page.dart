@@ -12,12 +12,10 @@ class AppShellPage extends StatefulWidget {
     super.key,
     this.initialIndex = 0,
     this.initialInventoryQuickAction,
-    this.openOrderComposerOnStart = false,
   });
 
   final int initialIndex;
   final InventoryQuickAction? initialInventoryQuickAction;
-  final bool openOrderComposerOnStart;
 
   @override
   State<AppShellPage> createState() => _AppShellPageState();
@@ -25,6 +23,11 @@ class AppShellPage extends StatefulWidget {
 
 class _AppShellPageState extends State<AppShellPage> {
   late int _selectedIndex;
+  int _homeRefreshTick = 0;
+  int _inventoryRefreshTick = 0;
+  int _orderRefreshTick = 0;
+  int _stockMovementRefreshTick = 0;
+  int _settingsRefreshTick = 0;
 
   @override
   void initState() {
@@ -43,26 +46,24 @@ class _AppShellPageState extends State<AppShellPage> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      const HomePage(showBottomNav: false),
+      HomePage(showBottomNav: false, refreshTick: _homeRefreshTick),
       InventoryPage(
         showBottomNav: false,
         initialQuickAction: widget.initialInventoryQuickAction,
+        refreshTick: _inventoryRefreshTick,
       ),
-      OrderPage(
+      OrderPage(showBottomNav: false, refreshTick: _orderRefreshTick),
+      StockMovementPage(
         showBottomNav: false,
-        openComposerOnStart: widget.openOrderComposerOnStart,
+        refreshTick: _stockMovementRefreshTick,
       ),
-      const StockMovementPage(showBottomNav: false),
-      const SettingPage(showBottomNav: false),
+      SettingPage(showBottomNav: false, refreshTick: _settingsRefreshTick),
     ];
 
     return Scaffold(
       body: Stack(
         children: [
-          IndexedStack(
-            index: _selectedIndex,
-            children: pages,
-          ),
+          IndexedStack(index: _selectedIndex, children: pages),
           Positioned(
             left: 0,
             right: 0,
@@ -70,7 +71,20 @@ class _AppShellPageState extends State<AppShellPage> {
             child: BottomNavigation(
               selectedIndex: _selectedIndex,
               onNavChanged: (index) {
-                setState(() => _selectedIndex = index);
+                setState(() {
+                  _selectedIndex = index;
+                  if (index == 0) {
+                    _homeRefreshTick++;
+                  } else if (index == 1) {
+                    _inventoryRefreshTick++;
+                  } else if (index == 2) {
+                    _orderRefreshTick++;
+                  } else if (index == 3) {
+                    _stockMovementRefreshTick++;
+                  } else if (index == 4) {
+                    _settingsRefreshTick++;
+                  }
+                });
               },
             ),
           ),

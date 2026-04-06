@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/store_model.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
 import 'package:inventory_app_project/pages/login_page.dart';
@@ -9,12 +10,18 @@ import 'package:inventory_app_project/services/store_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
+import 'package:inventory_app_project/widgets/page_loading_view.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SettingPage extends StatefulWidget {
   final bool showBottomNav;
+  final int refreshTick;
 
-  const SettingPage({super.key, this.showBottomNav = true});
+  const SettingPage({
+    super.key,
+    this.showBottomNav = true,
+    this.refreshTick = 0,
+  });
 
   @override
   State<SettingPage> createState() => _SettingPageState();
@@ -36,6 +43,14 @@ class _SettingPageState extends State<SettingPage> {
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshTick != widget.refreshTick) {
+      _loadProfile();
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -64,7 +79,9 @@ class _SettingPageState extends State<SettingPage> {
 
       int supplierCount = 0;
       if (firstStore != null) {
-        final suppliers = await _supplierService.getSuppliersByStoreId(firstStore.id);
+        final suppliers = await _supplierService.getSuppliersByStoreId(
+          firstStore.id,
+        );
         supplierCount = suppliers.length;
       }
 
@@ -115,12 +132,17 @@ class _SettingPageState extends State<SettingPage> {
   }
 
   String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return 'U';
     if (parts.length == 1) {
       return parts.first.substring(0, 1).toUpperCase();
     }
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 
   Future<void> _logout() async {
@@ -136,89 +158,28 @@ class _SettingPageState extends State<SettingPage> {
     final user = _currentUser;
     if (user == null) return;
 
-    final fullNameController = TextEditingController(
-      text: user.userMetadata?['full_name']?.toString() ?? '',
+    final input = await _EditProfileDialog.show(
+      context,
+      initialFullName: user.userMetadata?['full_name']?.toString() ?? '',
+      initialEmail: user.email ?? '',
+      initialPhone: user.userMetadata?['phone']?.toString() ?? '',
     );
-    final emailController = TextEditingController(text: user.email ?? '');
-    final phoneController = TextEditingController(
-      text: user.userMetadata?['phone']?.toString() ?? '',
-    );
+    if (!mounted || input == null) return;
 
-    final shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.cardBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text('Edit Profile'),
-          contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: fullNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full name',
-                    hintText: 'Enter your name',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'Enter your email',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone',
-                    hintText: 'Enter your phone number',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
+    final fullName = input.fullName;
+    final email = input.email;
+    final phone = input.phone;
 
-    final fullName = fullNameController.text.trim();
-    final email = emailController.text.trim();
-    final phone = phoneController.text.trim();
-    fullNameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
-
-    if (shouldSave != true) return;
     if (fullName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Full name is required.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Full name is required.')));
       return;
     }
     if (email.isEmpty || !email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Valid email is required.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Valid email is required.')));
       return;
     }
 
@@ -228,11 +189,10 @@ class _SettingPageState extends State<SettingPage> {
       final isEmailChanged = normalizedCurrentEmail != normalizedNewEmail;
 
       await Supabase.instance.client.auth.updateUser(
-        UserAttributes(data: {
-          ...?user.userMetadata,
-          'full_name': fullName,
-          'phone': phone,
-        }, email: isEmailChanged ? email : null),
+        UserAttributes(
+          data: {...?user.userMetadata, 'full_name': fullName, 'phone': phone},
+          email: isEmailChanged ? email : null,
+        ),
       );
 
       if (!mounted) return;
@@ -248,97 +208,41 @@ class _SettingPageState extends State<SettingPage> {
       await _loadProfile();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update profile: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update profile: $e')));
     }
   }
 
   Future<void> _editStoreInformation() async {
     final store = _store;
     if (store == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No store data available.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No store data available.')));
       return;
     }
 
-    final nameController = TextEditingController(text: store.name);
-    final phoneController = TextEditingController(text: store.phone);
-    final addressController = TextEditingController(text: store.address);
-    var isOpen24H = store.isOpen24H;
-
-    final shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppColors.cardBg,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              title: const Text('Edit Store Information'),
-              contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(labelText: 'Store name'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(labelText: 'Phone'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: addressController,
-                      maxLines: 2,
-                      decoration: const InputDecoration(labelText: 'Address'),
-                    ),
-                    const SizedBox(height: 8),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Open 24 Hours'),
-                      value: isOpen24H,
-                      onChanged: (value) => setDialogState(() => isOpen24H = value),
-                    ),
-                  ],
-                ),
-              ),
-              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              actions: [
-                TextButton(
-                  style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final input = await _EditStoreDialog.show(
+      context,
+      initialName: store.name,
+      initialPhone: store.phone,
+      initialAddress: store.address,
+      initialIsOpen24H: store.isOpen24H,
     );
 
-    final name = nameController.text.trim();
-    final phone = phoneController.text.trim();
-    final address = addressController.text.trim();
+    if (!mounted || input == null) return;
 
-    nameController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
+    final name = input.name;
+    final phone = input.phone;
+    final address = input.address;
+    final isOpen24H = input.isOpen24H;
 
-    if (shouldSave != true) return;
     if (name.isEmpty || phone.isEmpty || address.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Store name, phone, and address are required.')),
+        const SnackBar(
+          content: Text('Store name, phone, and address are required.'),
+        ),
       );
       return;
     }
@@ -358,7 +262,9 @@ class _SettingPageState extends State<SettingPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Store information updated successfully.')),
+        const SnackBar(
+          content: Text('Store information updated successfully.'),
+        ),
       );
       await _loadProfile();
     } catch (e) {
@@ -370,25 +276,10 @@ class _SettingPageState extends State<SettingPage> {
   }
 
   void _onBottomNavChanged(BuildContext context, int index) {
-    final Widget page;
-    switch (index) {
-      case 0:
-        page = const HomePage();
-      case 1:
-        page = const InventoryPage();
-      case 2:
-        page = const OrderPage();
-      case 3:
-        page = const StockMovementPage();
-      case 4:
-        return;
-      default:
-        return;
-    }
-
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    if (index == 4) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => AppShellPage(initialIndex: index)),
+    );
   }
 
   Widget _buildSettingsItem({
@@ -421,7 +312,10 @@ class _SettingPageState extends State<SettingPage> {
             if (value != null)
               Text(
                 value,
-                style: const TextStyle(fontSize: 12, color: AppColors.textMedium),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textMedium,
+                ),
               ),
             const SizedBox(width: 4),
             const Icon(Icons.chevron_right_rounded, color: AppColors.textLight),
@@ -433,7 +327,11 @@ class _SettingPageState extends State<SettingPage> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return PageLoadingView(
+        itemCount: 3,
+        topPadding: MediaQuery.of(context).padding.top + 8,
+        includeHeader: false,
+      );
     }
 
     if (_error != null) {
@@ -443,14 +341,20 @@ class _SettingPageState extends State<SettingPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: AppColors.errorText),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.errorText,
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Failed to load profile',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
-              ElevatedButton(onPressed: _loadProfile, child: const Text('Try again')),
+              ElevatedButton(
+                onPressed: _loadProfile,
+                child: const Text('Try again'),
+              ),
             ],
           ),
         ),
@@ -465,7 +369,12 @@ class _SettingPageState extends State<SettingPage> {
     return RefreshIndicator(
       onRefresh: _loadProfile,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.of(context).padding.top + 8,
+          16,
+          100,
+        ),
         children: [
           Row(
             children: [
@@ -481,7 +390,10 @@ class _SettingPageState extends State<SettingPage> {
               IconButton(
                 onPressed: _logout,
                 tooltip: 'Logout',
-                icon: const Icon(Icons.logout_rounded, color: Color(0xFFC87F2E)),
+                icon: const Icon(
+                  Icons.logout_rounded,
+                  color: Color(0xFFC87F2E),
+                ),
               ),
             ],
           ),
@@ -519,18 +431,27 @@ class _SettingPageState extends State<SettingPage> {
                 const SizedBox(height: 2),
                 Text(
                   roleLabel,
-                  style: const TextStyle(fontSize: 13, color: AppColors.textMedium),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textMedium,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   profilePhone == '-' ? 'No phone number' : profilePhone,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textMedium),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMedium,
+                  ),
                 ),
                 if (user?.email != null) ...[
                   const SizedBox(height: 6),
                   Text(
                     user!.email!,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textMedium),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMedium,
+                    ),
                   ),
                 ],
               ],
@@ -566,7 +487,10 @@ class _SettingPageState extends State<SettingPage> {
                         color: AppColors.primary.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.storefront_rounded, color: Color(0xFFC87F2E)),
+                      child: const Icon(
+                        Icons.storefront_rounded,
+                        color: Color(0xFFC87F2E),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -582,12 +506,18 @@ class _SettingPageState extends State<SettingPage> {
                     IconButton(
                       onPressed: _editStoreInformation,
                       tooltip: 'Edit store information',
-                      icon: const Icon(Icons.edit_outlined, color: AppColors.textMedium),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: AppColors.textMedium,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                _InfoRow(label: 'Business ID', value: _store != null ? 'STORE-${_store!.id}' : '-'),
+                _InfoRow(
+                  label: 'Business ID',
+                  value: _store != null ? 'STORE-${_store!.id}' : '-',
+                ),
                 _InfoRow(label: 'Phone', value: _store?.phone ?? '-'),
                 _InfoRow(label: 'Address', value: _store?.address ?? '-'),
                 _InfoRow(label: 'Suppliers', value: '$_supplierCount'),
@@ -623,13 +553,20 @@ class _SettingPageState extends State<SettingPage> {
                   label: 'Edit Store Information',
                   onTap: _editStoreInformation,
                 ),
-                _buildSettingsItem(icon: Icons.shield_outlined, label: 'Security & Privacy'),
+                _buildSettingsItem(
+                  icon: Icons.shield_outlined,
+                  label: 'Security & Privacy',
+                ),
                 _buildSettingsItem(
                   icon: Icons.notifications_none_rounded,
                   label: 'Notifications',
                   value: _supplierCount > 0 ? '$_supplierCount updates' : null,
                 ),
-                _buildSettingsItem(icon: Icons.translate_rounded, label: 'Language', value: 'English'),
+                _buildSettingsItem(
+                  icon: Icons.translate_rounded,
+                  label: 'Language',
+                  value: 'English',
+                ),
               ],
             ),
           ),
@@ -647,11 +584,17 @@ class _SettingPageState extends State<SettingPage> {
           Row(
             children: [
               Expanded(
-                child: _SupportCard(icon: Icons.help_outline_rounded, label: 'Help Center'),
+                child: _SupportCard(
+                  icon: Icons.help_outline_rounded,
+                  label: 'Help Center',
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _SupportCard(icon: Icons.chat_bubble_outline_rounded, label: 'Contact Support'),
+                child: _SupportCard(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: 'Contact Support',
+                ),
               ),
             ],
           ),
@@ -659,7 +602,11 @@ class _SettingPageState extends State<SettingPage> {
           const Center(
             child: Text(
               'StockFlow v2.4.0',
-              style: TextStyle(fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.textLight,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -755,6 +702,287 @@ class _SupportCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _EditProfileInput {
+  final String fullName;
+  final String email;
+  final String phone;
+
+  const _EditProfileInput({
+    required this.fullName,
+    required this.email,
+    required this.phone,
+  });
+}
+
+class _EditStoreInput {
+  final String name;
+  final String phone;
+  final String address;
+  final bool isOpen24H;
+
+  const _EditStoreInput({
+    required this.name,
+    required this.phone,
+    required this.address,
+    required this.isOpen24H,
+  });
+}
+
+class _EditProfileDialog extends StatefulWidget {
+  final String initialFullName;
+  final String initialEmail;
+  final String initialPhone;
+
+  const _EditProfileDialog({
+    required this.initialFullName,
+    required this.initialEmail,
+    required this.initialPhone,
+  });
+
+  static Future<_EditProfileInput?> show(
+    BuildContext context, {
+    required String initialFullName,
+    required String initialEmail,
+    required String initialPhone,
+  }) {
+    return showDialog<_EditProfileInput>(
+      context: context,
+      builder: (_) => _EditProfileDialog(
+        initialFullName: initialFullName,
+        initialEmail: initialEmail,
+        initialPhone: initialPhone,
+      ),
+    );
+  }
+
+  @override
+  State<_EditProfileDialog> createState() => _EditProfileDialogState();
+}
+
+class _EditProfileDialogState extends State<_EditProfileDialog> {
+  late final TextEditingController _fullNameController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _phoneController;
+
+  @override
+  void initState() {
+    super.initState();
+    _fullNameController = TextEditingController(text: widget.initialFullName);
+    _emailController = TextEditingController(text: widget.initialEmail);
+    _phoneController = TextEditingController(text: widget.initialPhone);
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    Navigator.of(context).pop(
+      _EditProfileInput(
+        fullName: _fullNameController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.cardBg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text('Edit Profile'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _fullNameController,
+              decoration: const InputDecoration(
+                labelText: 'Full name',
+                hintText: 'Enter your name',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                hintText: 'Enter your email',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Phone',
+                hintText: 'Enter your phone number',
+              ),
+              onSubmitted: (_) => _save(),
+            ),
+          ],
+        ),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      actions: [
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          onPressed: _save,
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditStoreDialog extends StatefulWidget {
+  final String initialName;
+  final String initialPhone;
+  final String initialAddress;
+  final bool initialIsOpen24H;
+
+  const _EditStoreDialog({
+    required this.initialName,
+    required this.initialPhone,
+    required this.initialAddress,
+    required this.initialIsOpen24H,
+  });
+
+  static Future<_EditStoreInput?> show(
+    BuildContext context, {
+    required String initialName,
+    required String initialPhone,
+    required String initialAddress,
+    required bool initialIsOpen24H,
+  }) {
+    return showDialog<_EditStoreInput>(
+      context: context,
+      builder: (_) => _EditStoreDialog(
+        initialName: initialName,
+        initialPhone: initialPhone,
+        initialAddress: initialAddress,
+        initialIsOpen24H: initialIsOpen24H,
+      ),
+    );
+  }
+
+  @override
+  State<_EditStoreDialog> createState() => _EditStoreDialogState();
+}
+
+class _EditStoreDialogState extends State<_EditStoreDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _addressController;
+  late bool _isOpen24H;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _phoneController = TextEditingController(text: widget.initialPhone);
+    _addressController = TextEditingController(text: widget.initialAddress);
+    _isOpen24H = widget.initialIsOpen24H;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final address = _addressController.text.trim();
+
+    if (name.isEmpty || phone.isEmpty || address.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Store name, phone, and address are required.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _EditStoreInput(
+        name: name,
+        phone: phone,
+        address: address,
+        isOpen24H: _isOpen24H,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.cardBg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text('Edit Store Information'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Store name'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Phone'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _addressController,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Address'),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Open 24 Hours'),
+              value: _isOpen24H,
+              onChanged: (value) => setState(() => _isOpen24H = value),
+            ),
+          ],
+        ),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      actions: [
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          onPressed: _save,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/order_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/pages/orders/edit_order_dialog.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
@@ -13,11 +14,13 @@ import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
+import 'package:inventory_app_project/widgets/page_loading_view.dart';
 
 class OrderPage extends StatefulWidget {
   final bool showBottomNav;
+  final int refreshTick;
 
-  const OrderPage({super.key, this.showBottomNav = true});
+  const OrderPage({super.key, this.showBottomNav = true, this.refreshTick = 0});
 
   @override
   State<OrderPage> createState() => _OrderPageState();
@@ -51,6 +54,14 @@ class _OrderPageState extends State<OrderPage> {
     _loadOrders();
   }
 
+  @override
+  void didUpdateWidget(covariant OrderPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshTick != widget.refreshTick) {
+      _loadOrders();
+    }
+  }
+
   Future<void> _loadOrders() async {
     setState(() {
       _isLoading = true;
@@ -77,7 +88,8 @@ class _OrderPageState extends State<OrderPage> {
           for (final inventory in inventories) inventory.productId: inventory,
         };
         final statusValues = _statusFilters.map((s) => s.value).toSet();
-        if (_selectedStatus != _allStatusValue && !statusValues.contains(_selectedStatus)) {
+        if (_selectedStatus != _allStatusValue &&
+            !statusValues.contains(_selectedStatus)) {
           _selectedStatus = _allStatusValue;
         }
         _isLoading = false;
@@ -92,9 +104,7 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   List<_StatusFilterOption> get _statusFilters {
-    final normalizedStatusMap = <String, String>{
-      ..._defaultStatusLabels,
-    };
+    final normalizedStatusMap = <String, String>{..._defaultStatusLabels};
 
     for (final order in _orders) {
       final status = order.status.trim().toUpperCase();
@@ -107,14 +117,21 @@ class _OrderPageState extends State<OrderPage> {
 
     return [
       const _StatusFilterOption(value: _allStatusValue, label: 'All'),
-      ...entries.map((entry) => _StatusFilterOption(value: entry.key, label: entry.value)),
+      ...entries.map(
+        (entry) => _StatusFilterOption(value: entry.key, label: entry.value),
+      ),
     ];
   }
 
   String _titleCaseStatus(String statusValue) {
-    final words = statusValue.split(RegExp(r'[_\s-]+')).where((w) => w.isNotEmpty);
+    final words = statusValue
+        .split(RegExp(r'[_\s-]+'))
+        .where((w) => w.isNotEmpty);
     return words
-        .map((word) => '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .map(
+          (word) =>
+              '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+        )
         .toList()
         .join(' ');
   }
@@ -239,36 +256,23 @@ class _OrderPageState extends State<OrderPage> {
       final message = (!wasDelivered && willBeDelivered)
           ? 'Order updated and stock movement IN created.'
           : 'Order updated successfully.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       await _loadOrders();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update order: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update order: $e')));
     }
   }
 
   void _onBottomNavChanged(BuildContext context, int index) {
-    final Widget page;
-    switch (index) {
-      case 0:
-        page = const HomePage();
-      case 1:
-        page = const InventoryPage();
-      case 2:
-        return;
-      case 3:
-        page = const StockMovementPage();
-      case 4:
-        page = const SettingPage();
-      default:
-        return;
-    }
-
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    if (index == 2) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => AppShellPage(initialIndex: index)),
+    );
   }
 
   Widget _buildSummary() {
@@ -286,15 +290,27 @@ class _OrderPageState extends State<OrderPage> {
       child: Row(
         children: [
           Expanded(
-            child: _Metric(label: 'Orders', value: '$totalOrders', color: AppColors.textDark),
+            child: _Metric(
+              label: 'Orders',
+              value: '$totalOrders',
+              color: AppColors.textDark,
+            ),
           ),
           Container(width: 1, height: 34, color: AppColors.borderColor),
           Expanded(
-            child: _Metric(label: 'Items', value: '$totalItems', color: const Color(0xFFC87F2E)),
+            child: _Metric(
+              label: 'Items',
+              value: '$totalItems',
+              color: const Color(0xFFC87F2E),
+            ),
           ),
           Container(width: 1, height: 34, color: AppColors.borderColor),
           Expanded(
-            child: _Metric(label: 'Revenue', value: _formatCurrency(totalRevenue), color: const Color(0xFF4D7A35)),
+            child: _Metric(
+              label: 'Revenue',
+              value: _formatCurrency(totalRevenue),
+              color: const Color(0xFF4D7A35),
+            ),
           ),
         ],
       ),
@@ -340,7 +356,11 @@ class _OrderPageState extends State<OrderPage> {
                 ),
                 child: Text(
                   _statusLabel(order.status),
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
                 ),
               ),
               PopupMenuButton<String>(
@@ -379,7 +399,10 @@ class _OrderPageState extends State<OrderPage> {
             children: [
               Text(
                 '${order.totalItem} ${order.unitType}',
-                style: const TextStyle(fontSize: 12, color: AppColors.textMedium),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textMedium,
+                ),
               ),
               const Spacer(),
               Text(
@@ -399,7 +422,10 @@ class _OrderPageState extends State<OrderPage> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return PageLoadingView(
+        itemCount: 4,
+        topPadding: MediaQuery.of(context).padding.top + 8,
+      );
     }
 
     if (_error != null) {
@@ -409,14 +435,20 @@ class _OrderPageState extends State<OrderPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: AppColors.errorText),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.errorText,
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Failed to load orders',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
-              ElevatedButton(onPressed: _loadOrders, child: const Text('Try again')),
+              ElevatedButton(
+                onPressed: _loadOrders,
+                child: const Text('Try again'),
+              ),
             ],
           ),
         ),
@@ -427,7 +459,12 @@ class _OrderPageState extends State<OrderPage> {
     return RefreshIndicator(
       onRefresh: _loadOrders,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.of(context).padding.top + 8,
+          16,
+          100,
+        ),
         children: [
           Row(
             children: [
@@ -438,7 +475,10 @@ class _OrderPageState extends State<OrderPage> {
                   color: AppColors.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.receipt_long_rounded, color: Color(0xFFC87F2E)),
+                child: const Icon(
+                  Icons.receipt_long_rounded,
+                  color: Color(0xFFC87F2E),
+                ),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -447,13 +487,22 @@ class _OrderPageState extends State<OrderPage> {
                   children: [
                     Text(
                       'Orders',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textDark,
+                      ),
                     ),
-                    Text('Store order overview', style: TextStyle(fontSize: 12, color: AppColors.textMedium)),
+                    Text(
+                      'Store order overview',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMedium,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              IconButton(onPressed: _loadOrders, icon: const Icon(Icons.refresh_rounded)),
             ],
           ),
           const SizedBox(height: 14),
@@ -470,16 +519,21 @@ class _OrderPageState extends State<OrderPage> {
                   child: ChoiceChip(
                     label: Text(statusOption.label),
                     selected: selected,
-                    onSelected: (_) => setState(() => _selectedStatus = statusOption.value),
+                    onSelected: (_) =>
+                        setState(() => _selectedStatus = statusOption.value),
                     selectedColor: AppColors.primary.withValues(alpha: 0.25),
                     backgroundColor: Colors.white,
                     side: BorderSide(
-                      color: selected ? const Color(0xFFF59E0B) : AppColors.borderColor,
+                      color: selected
+                          ? const Color(0xFFF59E0B)
+                          : AppColors.borderColor,
                     ),
                     labelStyle: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: selected ? const Color(0xFF92400E) : AppColors.textMedium,
+                      color: selected
+                          ? const Color(0xFF92400E)
+                          : AppColors.textMedium,
                     ),
                   ),
                 );
@@ -491,7 +545,10 @@ class _OrderPageState extends State<OrderPage> {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 26),
               child: Center(
-                child: Text('No orders found.', style: TextStyle(color: AppColors.textMedium)),
+                child: Text(
+                  'No orders found.',
+                  style: TextStyle(color: AppColors.textMedium),
+                ),
               ),
             )
           else
@@ -529,7 +586,11 @@ class _Metric extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _Metric({required this.label, required this.value, required this.color});
+  const _Metric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -539,9 +600,16 @@ class _Metric extends StatelessWidget {
           value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: color),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
         ),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textMedium)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppColors.textMedium),
+        ),
       ],
     );
   }
