@@ -136,79 +136,23 @@ class _SettingPageState extends State<SettingPage> {
     final user = _currentUser;
     if (user == null) return;
 
-    final fullNameController = TextEditingController(
-      text: user.userMetadata?['full_name']?.toString() ?? '',
-    );
-    final emailController = TextEditingController(text: user.email ?? '');
-    final phoneController = TextEditingController(
-      text: user.userMetadata?['phone']?.toString() ?? '',
-    );
-
-    final shouldSave = await showDialog<bool>(
+    final formData = await showDialog<_ProfileFormData>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.cardBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text('Edit Profile'),
-          contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: fullNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full name',
-                    hintText: 'Enter your name',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'Enter your email',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone',
-                    hintText: 'Enter your phone number',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
-            ),
-          ],
+        return _EditProfileDialog(
+          initialFullName: user.userMetadata?['full_name']?.toString() ?? '',
+          initialEmail: user.email ?? '',
+          initialPhone: user.userMetadata?['phone']?.toString() ?? '',
         );
       },
     );
 
-    final fullName = fullNameController.text.trim();
-    final email = emailController.text.trim();
-    final phone = phoneController.text.trim();
-    fullNameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
+    if (formData == null) return;
 
-    if (shouldSave != true) return;
+    final fullName = formData.fullName.trim();
+    final email = formData.email.trim();
+    final phone = formData.phone.trim();
+
     if (fullName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Full name is required.')),
@@ -263,79 +207,25 @@ class _SettingPageState extends State<SettingPage> {
       return;
     }
 
-    final nameController = TextEditingController(text: store.name);
-    final phoneController = TextEditingController(text: store.phone);
-    final addressController = TextEditingController(text: store.address);
-    var isOpen24H = store.isOpen24H;
-
-    final shouldSave = await showDialog<bool>(
+    final formData = await showDialog<_StoreFormData>(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppColors.cardBg,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              title: const Text('Edit Store Information'),
-              contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(labelText: 'Store name'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(labelText: 'Phone'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: addressController,
-                      maxLines: 2,
-                      decoration: const InputDecoration(labelText: 'Address'),
-                    ),
-                    const SizedBox(height: 8),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Open 24 Hours'),
-                      value: isOpen24H,
-                      onChanged: (value) => setDialogState(() => isOpen24H = value),
-                    ),
-                  ],
-                ),
-              ),
-              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              actions: [
-                TextButton(
-                  style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
+        return _EditStoreDialog(
+          initialName: store.name,
+          initialPhone: store.phone,
+          initialAddress: store.address,
+          initialIsOpen24H: store.isOpen24H,
         );
       },
     );
 
-    final name = nameController.text.trim();
-    final phone = phoneController.text.trim();
-    final address = addressController.text.trim();
+    if (formData == null) return;
 
-    nameController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
+    final name = formData.name.trim();
+    final phone = formData.phone.trim();
+    final address = formData.address.trim();
+    final isOpen24H = formData.isOpen24H;
 
-    if (shouldSave != true) return;
     if (name.isEmpty || phone.isEmpty || address.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Store name, phone, and address are required.')),
@@ -673,7 +563,7 @@ class _SettingPageState extends State<SettingPage> {
       backgroundColor: AppColors.backgroundLight,
       body: Stack(
         children: [
-          _buildBody(),
+          SafeArea(child: _buildBody()),
           if (widget.showBottomNav)
             Positioned(
               bottom: 0,
@@ -721,6 +611,231 @@ class _InfoRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProfileFormData {
+  final String fullName;
+  final String email;
+  final String phone;
+
+  const _ProfileFormData({
+    required this.fullName,
+    required this.email,
+    required this.phone,
+  });
+}
+
+class _EditProfileDialog extends StatefulWidget {
+  final String initialFullName;
+  final String initialEmail;
+  final String initialPhone;
+
+  const _EditProfileDialog({
+    required this.initialFullName,
+    required this.initialEmail,
+    required this.initialPhone,
+  });
+
+  @override
+  State<_EditProfileDialog> createState() => _EditProfileDialogState();
+}
+
+class _EditProfileDialogState extends State<_EditProfileDialog> {
+  late final TextEditingController _fullNameController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _phoneController;
+
+  @override
+  void initState() {
+    super.initState();
+    _fullNameController = TextEditingController(text: widget.initialFullName);
+    _emailController = TextEditingController(text: widget.initialEmail);
+    _phoneController = TextEditingController(text: widget.initialPhone);
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.cardBg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text('Edit Profile'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _fullNameController,
+              decoration: const InputDecoration(
+                labelText: 'Full name',
+                hintText: 'Enter your name',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                hintText: 'Enter your email',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Phone',
+                hintText: 'Enter your phone number',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      actions: [
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          onPressed: () => Navigator.of(context).pop(
+            _ProfileFormData(
+              fullName: _fullNameController.text.trim(),
+              email: _emailController.text.trim(),
+              phone: _phoneController.text.trim(),
+            ),
+          ),
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _StoreFormData {
+  final String name;
+  final String phone;
+  final String address;
+  final bool isOpen24H;
+
+  const _StoreFormData({
+    required this.name,
+    required this.phone,
+    required this.address,
+    required this.isOpen24H,
+  });
+}
+
+class _EditStoreDialog extends StatefulWidget {
+  final String initialName;
+  final String initialPhone;
+  final String initialAddress;
+  final bool initialIsOpen24H;
+
+  const _EditStoreDialog({
+    required this.initialName,
+    required this.initialPhone,
+    required this.initialAddress,
+    required this.initialIsOpen24H,
+  });
+
+  @override
+  State<_EditStoreDialog> createState() => _EditStoreDialogState();
+}
+
+class _EditStoreDialogState extends State<_EditStoreDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _addressController;
+  late bool _isOpen24H;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _phoneController = TextEditingController(text: widget.initialPhone);
+    _addressController = TextEditingController(text: widget.initialAddress);
+    _isOpen24H = widget.initialIsOpen24H;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.cardBg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text('Edit Store Information'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Store name'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Phone'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _addressController,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Address'),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Open 24 Hours'),
+              value: _isOpen24H,
+              onChanged: (value) => setState(() => _isOpen24H = value),
+            ),
+          ],
+        ),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      actions: [
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: AppColors.textMedium),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          onPressed: () => Navigator.of(context).pop(
+            _StoreFormData(
+              name: _nameController.text.trim(),
+              phone: _phoneController.text.trim(),
+              address: _addressController.text.trim(),
+              isOpen24H: _isOpen24H,
+            ),
+          ),
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

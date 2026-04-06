@@ -1085,6 +1085,7 @@ class _InventoryPageState extends State<InventoryPage> {
           // ── FAB: Quick Actions (+) ───────────────────────────────────
           InventoryQuickActionsSection(
             bottomOffset: navBarHeight + 12,
+            heroTag: 'inventory_quick_actions_fab',
             onActionSelected: _handleQuickAction,
           ),
         ],

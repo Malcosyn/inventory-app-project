@@ -10,6 +10,28 @@ import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 
+class EditProductFormData {
+  final String name;
+  final String barcode;
+  final String imageUrl;
+  final String costPriceText;
+  final String sellingPriceText;
+  final String thresholdText;
+  final int? categoryId;
+  final String? supplierId;
+
+  const EditProductFormData({
+    required this.name,
+    required this.barcode,
+    required this.imageUrl,
+    required this.costPriceText,
+    required this.sellingPriceText,
+    required this.thresholdText,
+    required this.categoryId,
+    required this.supplierId,
+  });
+}
+
 class EditProductDialog {
   static Future<void> show(
     BuildContext context, {
@@ -20,22 +42,6 @@ class EditProductDialog {
     required Map<int, CategoryModel> categoriesById,
     required Future<void> Function() onUpdated,
   }) async {
-    final nameController = TextEditingController(text: product.name);
-    final barcodeController = TextEditingController(text: product.barcode ?? '');
-    final imageUrlController = TextEditingController(text: product.imageUrl ?? '');
-    final costController = TextEditingController(
-      text: inventory?.costPrice.toString() ?? '',
-    );
-    final sellingController = TextEditingController(
-      text: inventory?.sellingPrice.toString() ?? '',
-    );
-    final thresholdController = TextEditingController(
-      text: inventory?.lowStockThreshold.toString() ?? '',
-    );
-
-    int? selectedCategoryId = product.categoryId;
-    String? selectedSupplierId = product.supplierId;
-
     final categories = categoriesById.values.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
@@ -48,44 +54,35 @@ class EditProductDialog {
 
     if (!context.mounted) return;
 
-    final shouldSave = await showModalBottomSheet<bool>(
+    final formData = await showModalBottomSheet<EditProductFormData>(
           context: context,
           useSafeArea: true,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (_) => _EditProductSheet(
-            nameController: nameController,
-            barcodeController: barcodeController,
-          imageUrlController: imageUrlController,
-            costController: costController,
-            sellingController: sellingController,
-            thresholdController: thresholdController,
             categories: categories,
             suppliers: suppliers,
-            initialCategoryId: selectedCategoryId,
-            initialSupplierId: selectedSupplierId,
+            initialName: product.name,
+            initialBarcode: product.barcode ?? '',
+            initialImageUrl: product.imageUrl ?? '',
+            initialCost: inventory?.costPrice.toString() ?? '',
+            initialSelling: inventory?.sellingPrice.toString() ?? '',
+            initialThreshold: inventory?.lowStockThreshold.toString() ?? '',
+            initialCategoryId: product.categoryId,
+            initialSupplierId: product.supplierId,
             hasInventory: inventory != null,
-            onCategoryChanged: (v) => selectedCategoryId = v,
-            onSupplierChanged: (v) => selectedSupplierId = v,
           ),
         ) ??
-        false;
+        null;
 
-    final updatedName = nameController.text.trim();
-    final updatedBarcode = barcodeController.text.trim();
-    final updatedImageUrl = imageUrlController.text.trim();
-    final parsedCost = int.tryParse(costController.text.trim());
-    final parsedSelling = int.tryParse(sellingController.text.trim());
-    final parsedThreshold = int.tryParse(thresholdController.text.trim());
+    if (!context.mounted || formData == null) return;
 
-    nameController.dispose();
-    barcodeController.dispose();
-    imageUrlController.dispose();
-    costController.dispose();
-    sellingController.dispose();
-    thresholdController.dispose();
-
-    if (!context.mounted || !shouldSave) return;
+    final updatedName = formData.name.trim();
+    final updatedBarcode = formData.barcode.trim();
+    final updatedImageUrl = formData.imageUrl.trim();
+    final parsedCost = int.tryParse(formData.costPriceText.trim());
+    final parsedSelling = int.tryParse(formData.sellingPriceText.trim());
+    final parsedThreshold = int.tryParse(formData.thresholdText.trim());
 
     final validationMessage = productService.validateProductName(updatedName);
     if (validationMessage != null) {
@@ -114,8 +111,8 @@ class EditProductDialog {
       name: updatedName,
       barcode: updatedBarcode,
       imageUrl: updatedImageUrl,
-      categoryId: selectedCategoryId,
-      supplierId: selectedSupplierId,
+      categoryId: formData.categoryId,
+      supplierId: formData.supplierId,
     );
     final updatedInventory = inventoryService.buildUpdatedInventory(
       original: inventory,
@@ -145,34 +142,30 @@ class EditProductDialog {
 }
 
 class _EditProductSheet extends StatefulWidget {
-  final TextEditingController nameController;
-  final TextEditingController barcodeController;
-  final TextEditingController imageUrlController;
-  final TextEditingController costController;
-  final TextEditingController sellingController;
-  final TextEditingController thresholdController;
   final List<CategoryModel> categories;
   final List<SupplierModel> suppliers;
+  final String initialName;
+  final String initialBarcode;
+  final String initialImageUrl;
+  final String initialCost;
+  final String initialSelling;
+  final String initialThreshold;
   final int? initialCategoryId;
   final String? initialSupplierId;
   final bool hasInventory;
-  final ValueChanged<int?> onCategoryChanged;
-  final ValueChanged<String?> onSupplierChanged;
 
   const _EditProductSheet({
-    required this.nameController,
-    required this.barcodeController,
-    required this.imageUrlController,
-    required this.costController,
-    required this.sellingController,
-    required this.thresholdController,
     required this.categories,
     required this.suppliers,
+    required this.initialName,
+    required this.initialBarcode,
+    required this.initialImageUrl,
+    required this.initialCost,
+    required this.initialSelling,
+    required this.initialThreshold,
     required this.initialCategoryId,
     required this.initialSupplierId,
     required this.hasInventory,
-    required this.onCategoryChanged,
-    required this.onSupplierChanged,
   });
 
   @override
@@ -182,6 +175,12 @@ class _EditProductSheet extends StatefulWidget {
 class _EditProductSheetState extends State<_EditProductSheet> {
   final ImagePicker _imagePicker = ImagePicker();
   final ProductService _productService = ProductService();
+  late final TextEditingController _nameController;
+  late final TextEditingController _barcodeController;
+  late final TextEditingController _imageUrlController;
+  late final TextEditingController _costController;
+  late final TextEditingController _sellingController;
+  late final TextEditingController _thresholdController;
 
   int? _categoryId;
   String? _supplierId;
@@ -192,8 +191,25 @@ class _EditProductSheetState extends State<_EditProductSheet> {
   @override
   void initState() {
     super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _barcodeController = TextEditingController(text: widget.initialBarcode);
+    _imageUrlController = TextEditingController(text: widget.initialImageUrl);
+    _costController = TextEditingController(text: widget.initialCost);
+    _sellingController = TextEditingController(text: widget.initialSelling);
+    _thresholdController = TextEditingController(text: widget.initialThreshold);
     _categoryId = widget.initialCategoryId;
     _supplierId = widget.initialSupplierId;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _barcodeController.dispose();
+    _imageUrlController.dispose();
+    _costController.dispose();
+    _sellingController.dispose();
+    _thresholdController.dispose();
+    super.dispose();
   }
 
   Future<void> _chooseImageSource() async {
@@ -242,14 +258,14 @@ class _EditProductSheetState extends State<_EditProductSheet> {
         _isUploadingImage = true;
       });
 
-      widget.imageUrlController.clear();
+      _imageUrlController.clear();
       final publicUrl = await _productService.uploadProductImage(
         bytes: bytes,
         originalName: file.name,
       );
 
       if (!mounted) return;
-      widget.imageUrlController.text = publicUrl;
+      _imageUrlController.text = publicUrl;
       setState(() {
         _isUploadingImage = false;
       });
@@ -289,7 +305,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
           color: AppColors.cardBg,
           child: Column(
             children: [
-              _TopBar(onClose: () => Navigator.of(context).pop(false)),
+              _TopBar(onClose: () => Navigator.of(context).pop()),
               Expanded(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),
@@ -302,14 +318,14 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                           _ImageHero(
                             isUploading: _isUploadingImage,
                             imageBytes: _selectedImageBytes,
-                            imageUrl: widget.imageUrlController.text.trim(),
+                            imageUrl: _imageUrlController.text.trim(),
                             onTap: _chooseImageSource,
                           ),
                           const SizedBox(height: 20),
                           _SectionLabel('Product Name'),
                           const SizedBox(height: 8),
                           _InputField(
-                            controller: widget.nameController,
+                            controller: _nameController,
                             hint: 'e.g. Organic Honey Jar',
                             icon: Icons.label_outline,
                             required: true,
@@ -335,7 +351,6 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                                 ],
                                 onChanged: (v) {
                                   setState(() => _categoryId = v);
-                                  widget.onCategoryChanged(v);
                                 },
                               ),
                             ),
@@ -358,7 +373,6 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                                 ],
                                 onChanged: (v) {
                                   setState(() => _supplierId = v);
-                                  widget.onSupplierChanged(v);
                                 },
                               ),
                             ),
@@ -367,7 +381,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                           _SectionLabel('Barcode'),
                           const SizedBox(height: 8),
                           _InputField(
-                            controller: widget.barcodeController,
+                            controller: _barcodeController,
                             hint: 'Scan or type manually',
                             icon: Icons.qr_code_rounded,
                           ),
@@ -377,7 +391,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                               left: _ColumnField(
                                 label: 'Cost Price',
                                 child: _InputField(
-                                  controller: widget.costController,
+                                  controller: _costController,
                                   hint: '0',
                                   icon: Icons.shopping_bag_outlined,
                                   required: true,
@@ -389,7 +403,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                               right: _ColumnField(
                                 label: 'Selling Price',
                                 child: _InputField(
-                                  controller: widget.sellingController,
+                                  controller: _sellingController,
                                   hint: '0',
                                   icon: Icons.sell_outlined,
                                   required: true,
@@ -403,7 +417,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                             _SectionLabel('Low Stock Threshold'),
                             const SizedBox(height: 8),
                             _InputField(
-                              controller: widget.thresholdController,
+                              controller: _thresholdController,
                               hint: '5',
                               icon: Icons.warning_amber_outlined,
                               required: true,
@@ -421,9 +435,20 @@ class _EditProductSheetState extends State<_EditProductSheet> {
               _BottomActions(
                 isUploadingImage: _isUploadingImage,
                 canSaveAfterImagePick:
-                    !_hasSelectedImage || widget.imageUrlController.text.trim().isNotEmpty,
-                onCancel: () => Navigator.of(context).pop(false),
-                onSave: () => Navigator.of(context).pop(true),
+                    !_hasSelectedImage || _imageUrlController.text.trim().isNotEmpty,
+                onCancel: () => Navigator.of(context).pop(),
+                onSave: () => Navigator.of(context).pop(
+                  EditProductFormData(
+                    name: _nameController.text.trim(),
+                    barcode: _barcodeController.text.trim(),
+                    imageUrl: _imageUrlController.text.trim(),
+                    costPriceText: _costController.text.trim(),
+                    sellingPriceText: _sellingController.text.trim(),
+                    thresholdText: _thresholdController.text.trim(),
+                    categoryId: _categoryId,
+                    supplierId: _supplierId,
+                  ),
+                ),
               ),
             ],
           ),

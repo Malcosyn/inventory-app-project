@@ -173,6 +173,7 @@ class _CategoryPageState extends State<CategoryPage> {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       floatingActionButton: FloatingActionButton(
+        heroTag: 'category_fab',
         onPressed: _addCategory,
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add, color: Colors.white),

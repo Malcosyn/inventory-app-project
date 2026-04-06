@@ -12,11 +12,13 @@ enum InventoryQuickAction {
 class InventoryQuickActionsSection extends StatelessWidget {
 	final double bottomOffset;
 	final Future<void> Function(InventoryQuickAction action) onActionSelected;
+	final String heroTag;
 
 	const InventoryQuickActionsSection({
 		super.key,
 		required this.bottomOffset,
 		required this.onActionSelected,
+		this.heroTag = 'quick_actions_fab',
 	});
 
 	@override
@@ -25,6 +27,7 @@ class InventoryQuickActionsSection extends StatelessWidget {
 			right: 16,
 			bottom: bottomOffset,
 			child: FloatingActionButton(
+				heroTag: heroTag,
 				onPressed: () => _showQuickActions(context),
 				backgroundColor: const Color(0xFFC87F2E),
 				foregroundColor: Colors.white,

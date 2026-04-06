@@ -17,6 +17,30 @@ class AddProductDialogResult {
   const AddProductDialogResult({required this.created, this.message});
 }
 
+class AddProductFormData {
+  final String name;
+  final String barcode;
+  final String imageUrl;
+  final String costPriceText;
+  final String sellingPriceText;
+  final String stockText;
+  final String thresholdText;
+  final int? categoryId;
+  final String? supplierId;
+
+  const AddProductFormData({
+    required this.name,
+    required this.barcode,
+    required this.imageUrl,
+    required this.costPriceText,
+    required this.sellingPriceText,
+    required this.stockText,
+    required this.thresholdText,
+    required this.categoryId,
+    required this.supplierId,
+  });
+}
+
 class AddProductDialog {
   static const int _defaultStoreId = 1;
 
@@ -24,16 +48,6 @@ class AddProductDialog {
     BuildContext context, {
     required Map<int, CategoryModel> categoriesById,
   }) async {
-    final nameController = TextEditingController();
-    final barcodeController = TextEditingController();
-    final imageUrlController = TextEditingController();
-    final costPriceController = TextEditingController();
-    final sellingPriceController = TextEditingController();
-    final stockController = TextEditingController(text: '0');
-    final thresholdController = TextEditingController(text: '5');
-
-    int? selectedCategoryId;
-    String? selectedSupplierId;
     final categoryService = CategoryService();
     final supplierService = SupplierService();
     final productService = ProductService();
@@ -60,7 +74,7 @@ class AddProductDialog {
       return const AddProductDialogResult(created: false);
     }
 
-    final shouldCreate = await showModalBottomSheet<bool>(
+    final formData = await showModalBottomSheet<AddProductFormData>(
           context: context,
           useSafeArea: true,
           isScrollControlled: true,
@@ -68,38 +82,21 @@ class AddProductDialog {
           builder: (_) => _AddProductSheet(
             categories: categories,
             suppliers: suppliers,
-            nameController: nameController,
-            barcodeController: barcodeController,
-            imageUrlController: imageUrlController,
-            costPriceController: costPriceController,
-            sellingPriceController: sellingPriceController,
-            stockController: stockController,
-            thresholdController: thresholdController,
-            onCategoryChanged: (v) => selectedCategoryId = v,
-            onSupplierChanged: (v) => selectedSupplierId = v,
           ),
         ) ??
-        false;
+        null;
 
-    final name = nameController.text.trim();
-    final barcode = barcodeController.text.trim();
-    final imageUrl = imageUrlController.text.trim();
-    final costPrice = int.tryParse(costPriceController.text.trim());
-    final sellingPrice = int.tryParse(sellingPriceController.text.trim());
-    final initialStock = int.tryParse(stockController.text.trim());
-    final threshold = int.tryParse(thresholdController.text.trim());
-
-    nameController.dispose();
-    barcodeController.dispose();
-    imageUrlController.dispose();
-    costPriceController.dispose();
-    sellingPriceController.dispose();
-    stockController.dispose();
-    thresholdController.dispose();
-
-    if (!context.mounted || !shouldCreate) {
+    if (!context.mounted || formData == null) {
       return const AddProductDialogResult(created: false);
     }
+
+    final name = formData.name.trim();
+    final barcode = formData.barcode.trim();
+    final imageUrl = formData.imageUrl.trim();
+    final costPrice = int.tryParse(formData.costPriceText.trim());
+    final sellingPrice = int.tryParse(formData.sellingPriceText.trim());
+    final initialStock = int.tryParse(formData.stockText.trim());
+    final threshold = int.tryParse(formData.thresholdText.trim());
 
     final nameError = productService.validateProductName(name);
     if (nameError != null) {
@@ -116,8 +113,8 @@ class AddProductDialog {
       return AddProductDialogResult(created: false, message: inventoryError);
     }
 
-    if (selectedCategoryId != null) {
-      final validCategory = categories.any((c) => c.id == selectedCategoryId);
+    if (formData.categoryId != null) {
+      final validCategory = categories.any((c) => c.id == formData.categoryId);
       if (!validCategory) {
         return const AddProductDialogResult(
           created: false,
@@ -134,8 +131,8 @@ class AddProductDialog {
         sellingPrice: sellingPrice!,
         initialStock: initialStock!,
         threshold: threshold!,
-        categoryId: selectedCategoryId,
-        supplierId: selectedSupplierId,
+        categoryId: formData.categoryId,
+        supplierId: formData.supplierId,
         imageUrl: imageUrl.isEmpty ? null : imageUrl,
         barcode: barcode.isEmpty ? null : barcode,
         inventoryService: inventoryService,
@@ -174,28 +171,10 @@ class AddProductDialog {
 class _AddProductSheet extends StatefulWidget {
   final List<CategoryModel> categories;
   final List<SupplierModel> suppliers;
-  final TextEditingController nameController;
-  final TextEditingController barcodeController;
-  final TextEditingController imageUrlController;
-  final TextEditingController costPriceController;
-  final TextEditingController sellingPriceController;
-  final TextEditingController stockController;
-  final TextEditingController thresholdController;
-  final ValueChanged<int?> onCategoryChanged;
-  final ValueChanged<String?> onSupplierChanged;
 
   const _AddProductSheet({
     required this.categories,
     required this.suppliers,
-    required this.nameController,
-    required this.barcodeController,
-    required this.imageUrlController,
-    required this.costPriceController,
-    required this.sellingPriceController,
-    required this.stockController,
-    required this.thresholdController,
-    required this.onCategoryChanged,
-    required this.onSupplierChanged,
   });
 
   @override
@@ -205,12 +184,43 @@ class _AddProductSheet extends StatefulWidget {
 class _AddProductSheetState extends State<_AddProductSheet> {
   final ImagePicker _imagePicker = ImagePicker();
   final ProductService _productService = ProductService();
+  late final TextEditingController _nameController;
+  late final TextEditingController _barcodeController;
+  late final TextEditingController _imageUrlController;
+  late final TextEditingController _costPriceController;
+  late final TextEditingController _sellingPriceController;
+  late final TextEditingController _stockController;
+  late final TextEditingController _thresholdController;
 
   int? _categoryId;
   String? _supplierId;
   Uint8List? _selectedImageBytes;
   bool _isUploadingImage = false;
   bool _hasSelectedImage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+    _barcodeController = TextEditingController();
+    _imageUrlController = TextEditingController();
+    _costPriceController = TextEditingController();
+    _sellingPriceController = TextEditingController();
+    _stockController = TextEditingController(text: '0');
+    _thresholdController = TextEditingController(text: '5');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _barcodeController.dispose();
+    _imageUrlController.dispose();
+    _costPriceController.dispose();
+    _sellingPriceController.dispose();
+    _stockController.dispose();
+    _thresholdController.dispose();
+    super.dispose();
+  }
 
   Future<void> _chooseImageSource() async {
     final source = await showModalBottomSheet<ImageSource>(
@@ -258,14 +268,14 @@ class _AddProductSheetState extends State<_AddProductSheet> {
         _isUploadingImage = true;
       });
 
-      widget.imageUrlController.clear();
+      _imageUrlController.clear();
       final publicUrl = await _productService.uploadProductImage(
         bytes: bytes,
         originalName: file.name,
       );
 
       if (!mounted) return;
-      widget.imageUrlController.text = publicUrl;
+      _imageUrlController.text = publicUrl;
       setState(() {
         _isUploadingImage = false;
       });
@@ -303,7 +313,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
           color: AppColors.cardBg,
           child: Column(
             children: [
-              _TopBar(onClose: () => Navigator.of(context).pop(false)),
+              _TopBar(onClose: () => Navigator.of(context).pop()),
               Expanded(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),
@@ -316,14 +326,14 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                           _ImageHero(
                             isUploading: _isUploadingImage,
                             imageBytes: _selectedImageBytes,
-                            imageUrl: widget.imageUrlController.text.trim(),
+                            imageUrl: _imageUrlController.text.trim(),
                             onTap: _chooseImageSource,
                           ),
                           const SizedBox(height: 20),
                           _SectionLabel('Product Name'),
                           const SizedBox(height: 8),
                           _InputField(
-                            controller: widget.nameController,
+                            controller: _nameController,
                             hint: 'e.g. Organic Honey Jar',
                             icon: Icons.label_outline,
                             required: true,
@@ -349,7 +359,6 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                                 ],
                                 onChanged: (v) {
                                   setState(() => _categoryId = v);
-                                  widget.onCategoryChanged(v);
                                 },
                               ),
                             ),
@@ -372,7 +381,6 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                                 ],
                                 onChanged: (v) {
                                   setState(() => _supplierId = v);
-                                  widget.onSupplierChanged(v);
                                 },
                               ),
                             ),
@@ -381,7 +389,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                           _SectionLabel('Barcode'),
                           const SizedBox(height: 8),
                           _InputField(
-                            controller: widget.barcodeController,
+                            controller: _barcodeController,
                             hint: 'Scan or type manually',
                             icon: Icons.qr_code_rounded,
                           ),
@@ -390,7 +398,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                             left: _ColumnField(
                               label: 'Cost Price',
                               child: _InputField(
-                                controller: widget.costPriceController,
+                                controller: _costPriceController,
                                 hint: '0',
                                 icon: Icons.shopping_bag_outlined,
                                 required: true,
@@ -404,7 +412,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                             right: _ColumnField(
                               label: 'Selling Price',
                               child: _InputField(
-                                controller: widget.sellingPriceController,
+                                controller: _sellingPriceController,
                                 hint: '0',
                                 icon: Icons.sell_outlined,
                                 required: true,
@@ -421,7 +429,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                             left: _ColumnField(
                               label: 'Initial Stock',
                               child: _InputField(
-                                controller: widget.stockController,
+                                controller: _stockController,
                                 hint: '0',
                                 icon: Icons.inventory_2_outlined,
                                 required: true,
@@ -435,7 +443,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                             right: _ColumnField(
                               label: 'Low Stock Threshold',
                               child: _InputField(
-                                controller: widget.thresholdController,
+                                controller: _thresholdController,
                                 hint: '5',
                                 icon: Icons.warning_amber_outlined,
                                 required: true,
@@ -456,9 +464,21 @@ class _AddProductSheetState extends State<_AddProductSheet> {
               _BottomActions(
                 isUploadingImage: _isUploadingImage,
                 canSaveAfterImagePick:
-                    !_hasSelectedImage || widget.imageUrlController.text.trim().isNotEmpty,
-                onCancel: () => Navigator.of(context).pop(false),
-                onSave: () => Navigator.of(context).pop(true),
+                    !_hasSelectedImage || _imageUrlController.text.trim().isNotEmpty,
+                onCancel: () => Navigator.of(context).pop(),
+                onSave: () => Navigator.of(context).pop(
+                  AddProductFormData(
+                    name: _nameController.text.trim(),
+                    barcode: _barcodeController.text.trim(),
+                    imageUrl: _imageUrlController.text.trim(),
+                    costPriceText: _costPriceController.text.trim(),
+                    sellingPriceText: _sellingPriceController.text.trim(),
+                    stockText: _stockController.text.trim(),
+                    thresholdText: _thresholdController.text.trim(),
+                    categoryId: _categoryId,
+                    supplierId: _supplierId,
+                  ),
+                ),
               ),
             ],
           ),

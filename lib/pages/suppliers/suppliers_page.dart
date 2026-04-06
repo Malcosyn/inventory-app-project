@@ -180,6 +180,7 @@ class _SuppliersPageState extends State<SuppliersPage> {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       floatingActionButton: FloatingActionButton(
+        heroTag: 'supplier_fab',
         onPressed: _addSupplier,
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add, color: Colors.white),

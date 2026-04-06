@@ -487,7 +487,7 @@ class _StockMovementPageState extends State<StockMovementPage> {
       backgroundColor: AppColors.backgroundLight,
       body: Stack(
         children: [
-          _buildBody(),
+          SafeArea(child: _buildBody()),
           if (widget.showBottomNav)
             Positioned(
               bottom: 0,

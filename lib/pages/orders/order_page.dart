@@ -13,6 +13,7 @@ import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
+import 'package:inventory_app_project/widgets/quick_actions_section.dart';
 
 class OrderPage extends StatefulWidget {
   final bool showBottomNav;
@@ -271,6 +272,14 @@ class _OrderPageState extends State<OrderPage> {
     ).pushReplacement(MaterialPageRoute(builder: (_) => page));
   }
 
+  Future<void> _handleQuickAction(InventoryQuickAction action) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => InventoryPage(initialQuickAction: action),
+      ),
+    );
+  }
+
   Widget _buildSummary() {
     final totalOrders = _orders.length;
     final totalItems = _orders.fold<int>(0, (sum, o) => sum + o.totalItem);
@@ -503,11 +512,13 @@ class _OrderPageState extends State<OrderPage> {
 
   @override
   Widget build(BuildContext context) {
+    final navBarHeight = BottomNavigation.heightFor(context);
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: Stack(
         children: [
-          _buildBody(),
+          SafeArea(child: _buildBody()),
           if (widget.showBottomNav)
             Positioned(
               bottom: 0,
@@ -518,6 +529,11 @@ class _OrderPageState extends State<OrderPage> {
                 onNavChanged: (index) => _onBottomNavChanged(context, index),
               ),
             ),
+          InventoryQuickActionsSection(
+            bottomOffset: navBarHeight + 12,
+            heroTag: 'order_quick_actions_fab',
+            onActionSelected: _handleQuickAction,
+          ),
         ],
       ),
     );

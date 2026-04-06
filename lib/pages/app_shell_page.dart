@@ -50,7 +50,6 @@ class _AppShellPageState extends State<AppShellPage> {
       ),
       OrderPage(
         showBottomNav: false,
-        openComposerOnStart: widget.openOrderComposerOnStart,
       ),
       const StockMovementPage(showBottomNav: false),
       const SettingPage(showBottomNav: false),
