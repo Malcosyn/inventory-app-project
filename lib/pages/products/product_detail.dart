@@ -4,7 +4,10 @@ import 'package:inventory_app_project/models/inventory_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
+import 'package:inventory_app_project/pages/stock_movements/add_stock_movement_dialog.dart';
+import 'package:inventory_app_project/services/inventory_service.dart';
 import 'package:inventory_app_project/services/product_service.dart';
+import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 
 // ─── Shared Text Styles ──────────────────────────────────────────────────────
@@ -68,24 +71,37 @@ enum _StockState {
 
   static _StockState fromDomain(ProductStockState state) => switch (state) {
     ProductStockState.inStock => _StockState.inStock,
-    ProductStockState.low     => _StockState.low,
-    ProductStockState.out     => _StockState.out,
+    ProductStockState.low => _StockState.low,
+    ProductStockState.out => _StockState.out,
   };
 }
 
+class ProductDetailUpdate {
+  final ProductModel product;
+  final InventoryModel? inventory;
+  final CategoryModel? category;
+  final String? categoryNameOverride;
+  final SupplierModel? supplier;
+
+  const ProductDetailUpdate({
+    required this.product,
+    this.inventory,
+    this.category,
+    this.categoryNameOverride,
+    this.supplier,
+  });
+}
+
 // ProductDetailPage
-class ProductDetailPage extends StatelessWidget {
+class ProductDetailPage extends StatefulWidget {
   final ProductModel product;
   final InventoryModel? inventory;
   final CategoryModel? category;
   final String? categoryNameOverride;
   final SupplierModel? supplier;
   final List<StockMovementModel> recentMovements;
-  final VoidCallback? onEdit;
-  final VoidCallback? onStockIn;
-  final VoidCallback? onStockOut;
+  final Future<ProductDetailUpdate?> Function()? onEdit;
   final VoidCallback? onDelete;
-  ProductService get _productService => ProductService();
 
   const ProductDetailPage({
     super.key,
@@ -96,18 +112,159 @@ class ProductDetailPage extends StatelessWidget {
     this.supplier,
     this.recentMovements = const [],
     this.onEdit,
-    this.onStockIn,
-    this.onStockOut,
     this.onDelete,
   });
 
   @override
+  State<ProductDetailPage> createState() => _ProductDetailPageState();
+}
+
+class _ProductDetailPageState extends State<ProductDetailPage> {
+  final ProductService _productService = ProductService();
+  final InventoryService _inventoryService = InventoryService();
+  final StockMovementService _stockMovementService = StockMovementService();
+
+  late ProductModel _product;
+  late InventoryModel? _inventory;
+  late CategoryModel? _category;
+  late String? _categoryNameOverride;
+  late SupplierModel? _supplier;
+  late List<StockMovementModel> _recentMovements;
+
+  @override
+  void initState() {
+    super.initState();
+    _product = widget.product;
+    _inventory = widget.inventory;
+    _category = widget.category;
+    _categoryNameOverride = widget.categoryNameOverride;
+    _supplier = widget.supplier;
+    _recentMovements = List<StockMovementModel>.from(widget.recentMovements);
+  }
+
+  Future<void> _handleEdit() async {
+    final onEdit = widget.onEdit;
+    if (onEdit == null) return;
+
+    final updated = await onEdit();
+    if (!mounted || updated == null) return;
+
+    setState(() {
+      _product = updated.product;
+      _inventory = updated.inventory;
+      _category = updated.category;
+      _categoryNameOverride = updated.categoryNameOverride;
+      _supplier = updated.supplier;
+    });
+  }
+
+  Future<void> _changeStock({required bool isStockIn}) async {
+    final inventory = _inventory;
+    if (inventory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inventory data not found.')),
+      );
+      return;
+    }
+
+    final input = await AddStockMovementDialog.show(
+      context,
+      isStockIn: isStockIn,
+    );
+    if (!mounted || input == null) return;
+
+    final newStock = isStockIn
+        ? inventory.stockQuantity + input.quantity
+        : inventory.stockQuantity - input.quantity;
+
+    if (newStock < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Stock cannot be negative.')),
+      );
+      return;
+    }
+
+    final updatedInventory = InventoryModel(
+      id: inventory.id,
+      productId: inventory.productId,
+      costPrice: inventory.costPrice,
+      sellingPrice: inventory.sellingPrice,
+      stockQuantity: newStock,
+      lowStockThreshold: inventory.lowStockThreshold,
+      updatedAt: DateTime.now(),
+      storeId: inventory.storeId,
+    );
+
+    try {
+      await _inventoryService.updateInventory(updatedInventory);
+      await _stockMovementService.createStockMovementEntry(
+        productId: inventory.productId,
+        type: isStockIn ? 'IN' : 'OUT',
+        quantity: input.quantity,
+        stockAfter: newStock,
+        reason: input.reason,
+        note: input.note.isNotEmpty
+            ? input.note
+            : (isStockIn
+                  ? 'Manual stock in from product detail'
+                  : 'Manual stock out from product detail'),
+        storeId: inventory.storeId,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _inventory = updatedInventory;
+        _recentMovements = [
+          StockMovementModel(
+            id: DateTime.now().microsecondsSinceEpoch.toString(),
+            productId: inventory.productId,
+            type: isStockIn ? 'IN' : 'OUT',
+            quantity: input.quantity,
+            stockAfter: newStock,
+            reason: input.reason,
+            note: input.note.isNotEmpty
+                ? input.note
+                : (isStockIn
+                      ? 'Manual stock in from product detail'
+                      : 'Manual stock out from product detail'),
+            createdAt: DateTime.now(),
+            storeId: inventory.storeId,
+          ),
+          ..._recentMovements,
+        ];
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isStockIn
+                ? 'Stock added successfully.'
+                : 'Stock reduced successfully.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update stock: $e')));
+    }
+  }
+
+  Future<void> _handleStockIn() => _changeStock(isStockIn: true);
+
+  Future<void> _handleStockOut() => _changeStock(isStockIn: false);
+
+  @override
   Widget build(BuildContext context) {
-    final vm         = _productService.buildDetailViewData(product, inventory);
+    final vm = _productService.buildDetailViewData(_product, _inventory);
     final stockState = _StockState.fromDomain(vm.stockState);
-    final catName    = categoryNameOverride ??
-        category?.name ??
-        (product.categoryId != null ? 'Category ${product.categoryId}' : 'Uncategorized');
+    final catName =
+        _categoryNameOverride ??
+        _category?.name ??
+        (_product.categoryId != null
+            ? 'Category ${_product.categoryId}'
+            : 'Uncategorized');
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -131,7 +288,7 @@ class ProductDetailPage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         children: [
           _HeroCard(
-            product: product,
+            product: _product,
             categoryName: catName,
             stockLabel: stockState.label,
             stock: vm.stock,
@@ -157,27 +314,31 @@ class ProductDetailPage extends StatelessWidget {
           const SizedBox(height: 16),
           _SectionLabel('SUPPLIER'),
           const SizedBox(height: 8),
-          _SupplierCard(supplier: supplier),
+          _SupplierCard(supplier: _supplier),
           const SizedBox(height: 16),
           _SectionLabel('PRODUCT INFO'),
           const SizedBox(height: 8),
           _InfoCard(
             rows: [
-              _RowData('Barcode', product.barcode ?? '—'),
-              _RowData('Created At', _formatDate(product.createdAt), isLast: true),
+              _RowData('Barcode', _product.barcode ?? '—'),
+              _RowData(
+                'Created At',
+                _formatDate(_product.createdAt),
+                isLast: true,
+              ),
             ],
           ),
           const SizedBox(height: 16),
           _SectionLabel('RECENT STOCK MOVEMENTS'),
           const SizedBox(height: 8),
-          _MovementsCard(movements: recentMovements),
+          _MovementsCard(movements: _recentMovements),
           const SizedBox(height: 16),
         ],
       ),
       bottomNavigationBar: _BottomActions(
-        onEdit: onEdit,
-        onStockIn: onStockIn,
-        onStockOut: onStockOut,
+        onEdit: _handleEdit,
+        onStockIn: _handleStockIn,
+        onStockOut: _handleStockOut,
       ),
     );
   }
@@ -194,7 +355,11 @@ class _AppBarButton extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-  const _AppBarButton({required this.icon, required this.color, required this.onTap});
+  const _AppBarButton({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -248,7 +413,9 @@ class _HeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageUrl = _productService.resolveImageUrl(product.imageUrl);
-    final proxyUrl = imageUrl != null ? _productService.proxyImageUrl(imageUrl) : null;
+    final proxyUrl = imageUrl != null
+        ? _productService.proxyImageUrl(imageUrl)
+        : null;
 
     return Container(
       decoration: BoxDecoration(
@@ -274,8 +441,11 @@ class _HeroCard extends StatelessWidget {
               color: AppColors.backgroundAlt,
               child: imageUrl == null
                   ? const Center(
-                      child: Icon(Icons.inventory_2_outlined,
-                          size: 56, color: AppColors.textLight),
+                      child: Icon(
+                        Icons.inventory_2_outlined,
+                        size: 56,
+                        color: AppColors.textLight,
+                      ),
                     )
                   : _ProductDetailImage(
                       primaryUrl: imageUrl,
@@ -297,19 +467,30 @@ class _HeroCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.folder_outlined,
-                              size: 13, color: AppColors.textLight),
+                          const Icon(
+                            Icons.folder_outlined,
+                            size: 13,
+                            color: AppColors.textLight,
+                          ),
                           const SizedBox(width: 4),
-                          Text(categoryName,
-                              style: const TextStyle(
-                                  fontSize: 13, color: AppColors.textMedium)),
+                          Text(
+                            categoryName,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textMedium,
+                            ),
+                          ),
                         ],
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                _StatusBadge(label: stockLabel, fg: stateColor, bg: stateBgColor),
+                _StatusBadge(
+                  label: stockLabel,
+                  fg: stateColor,
+                  bg: stateBgColor,
+                ),
               ],
             ),
           ),
@@ -337,7 +518,8 @@ class _StatusBadge extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 6, height: 6,
+          width: 6,
+          height: 6,
           decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
@@ -439,19 +621,27 @@ class _StatTile extends StatelessWidget {
               child: Icon(icon, color: iconColor, size: 16),
             ),
             const SizedBox(height: 8),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 10.5, color: AppColors.textLight, fontWeight: FontWeight.w500),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10.5,
+                color: AppColors.textLight,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             const SizedBox(height: 2),
-            Text(value,
-                style: TextStyle(
-                    fontSize: compact ? 11.5 : 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textDark),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: compact ? 11.5 : 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
@@ -474,7 +664,7 @@ class _PriceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const greenColor = Color(0xFF16A34A);
-    const greenBg    = Color(0xFFDCFCE7);
+    const greenBg = Color(0xFFDCFCE7);
 
     return Container(
       decoration: BoxDecoration(
@@ -503,7 +693,9 @@ class _PriceCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: marginPositive ? greenBg : AppColors.errorBg,
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(16),
+              ),
             ),
             child: Row(
               children: [
@@ -515,13 +707,19 @@ class _PriceCard extends StatelessWidget {
                   color: marginPositive ? greenColor : AppColors.errorText,
                 ),
                 const SizedBox(width: 8),
-                Text('Margin per Item',
-                    style: _T.label.copyWith(
-                        color: marginPositive ? greenColor : AppColors.errorText)),
+                Text(
+                  'Margin per Item',
+                  style: _T.label.copyWith(
+                    color: marginPositive ? greenColor : AppColors.errorText,
+                  ),
+                ),
                 const Spacer(),
-                Text(margin,
-                    style: _T.value.copyWith(
-                        color: marginPositive ? greenColor : AppColors.errorText)),
+                Text(
+                  margin,
+                  style: _T.value.copyWith(
+                    color: marginPositive ? greenColor : AppColors.errorText,
+                  ),
+                ),
               ],
             ),
           ),
@@ -539,18 +737,25 @@ class _PriceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    child: Row(children: [
-      Text(label, style: _T.label),
-      const Spacer(),
-      Text(value, style: valueStyle ?? _T.value),
-    ]),
+    child: Row(
+      children: [
+        Text(label, style: _T.label),
+        const Spacer(),
+        Text(value, style: valueStyle ?? _T.value),
+      ],
+    ),
   );
 }
 
 class _Divider extends StatelessWidget {
   @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, thickness: 1, color: AppColors.borderColor, indent: 16, endIndent: 16);
+  Widget build(BuildContext context) => const Divider(
+    height: 1,
+    thickness: 1,
+    color: AppColors.borderColor,
+    indent: 16,
+    endIndent: 16,
+  );
 }
 
 // Supplier Card
@@ -584,12 +789,17 @@ class _SupplierCard extends StatelessWidget {
                 color: AppColors.iconBgLight,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.person_off_outlined,
-                  size: 20, color: AppColors.textLight),
+              child: const Icon(
+                Icons.person_off_outlined,
+                size: 20,
+                color: AppColors.textLight,
+              ),
             ),
             const SizedBox(width: 12),
-            const Text('No supplier assigned',
-                style: TextStyle(color: AppColors.textMedium, fontSize: 13.5)),
+            const Text(
+              'No supplier assigned',
+              style: TextStyle(color: AppColors.textMedium, fontSize: 13.5),
+            ),
           ],
         ),
       );
@@ -639,17 +849,24 @@ class _SupplierCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(supplier!.name,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textDark,
-                              fontSize: 14)),
+                      Text(
+                        supplier!.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textDark,
+                          fontSize: 14,
+                        ),
+                      ),
                       if (supplier!.email?.isNotEmpty ?? false)
-                        Text(supplier!.email!,
-                            style: const TextStyle(
-                                color: AppColors.textMedium, fontSize: 12),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
+                        Text(
+                          supplier!.email!,
+                          style: const TextStyle(
+                            color: AppColors.textMedium,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                     ],
                   ),
                 ),
@@ -657,15 +874,27 @@ class _SupplierCard extends StatelessWidget {
             ),
           ),
           if (supplier!.phone.isNotEmpty || (supplier!.address.isNotEmpty)) ...[
-            const Divider(height: 1, thickness: 1, color: AppColors.borderColor),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.borderColor,
+            ),
             _InfoCard(
               rounded: false,
               rows: [
                 if (supplier!.phone.isNotEmpty)
-                  _RowData('Phone', supplier!.phone, icon: Icons.phone_outlined),
+                  _RowData(
+                    'Phone',
+                    supplier!.phone,
+                    icon: Icons.phone_outlined,
+                  ),
                 if (supplier!.address.isNotEmpty)
-                  _RowData('Address', supplier!.address,
-                      icon: Icons.location_on_outlined, isLast: true),
+                  _RowData(
+                    'Address',
+                    supplier!.address,
+                    icon: Icons.location_on_outlined,
+                    isLast: true,
+                  ),
               ],
             ),
           ],
@@ -712,7 +941,10 @@ class _InfoCard extends StatelessWidget {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     if (row.icon != null) ...[
@@ -722,20 +954,25 @@ class _InfoCard extends StatelessWidget {
                     Text(row.label, style: _T.label),
                     const Spacer(),
                     Flexible(
-                      child: Text(row.value,
-                          style: _T.value,
-                          textAlign: TextAlign.end,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        row.value,
+                        style: _T.value,
+                        textAlign: TextAlign.end,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
               ),
               if (!row.isLast && i < rows.length - 1)
                 const Divider(
-                    height: 1, thickness: 1,
-                    color: AppColors.borderColor,
-                    indent: 16, endIndent: 16),
+                  height: 1,
+                  thickness: 1,
+                  color: AppColors.borderColor,
+                  indent: 16,
+                  endIndent: 16,
+                ),
             ],
           );
         }).toList(),
@@ -752,7 +989,7 @@ class _MovementsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const greenColor = Color(0xFF16A34A);
-    const greenBg    = Color(0xFFDCFCE7);
+    const greenBg = Color(0xFFDCFCE7);
 
     if (movements.isEmpty) {
       return Container(
@@ -772,10 +1009,16 @@ class _MovementsCard extends StatelessWidget {
         child: const Center(
           child: Column(
             children: [
-              Icon(Icons.swap_horiz_rounded, size: 32, color: AppColors.textLight),
+              Icon(
+                Icons.swap_horiz_rounded,
+                size: 32,
+                color: AppColors.textLight,
+              ),
               SizedBox(height: 8),
-              Text('No movement data yet.',
-                  style: TextStyle(color: AppColors.textMedium, fontSize: 13.5)),
+              Text(
+                'No movement data yet.',
+                style: TextStyle(color: AppColors.textMedium, fontSize: 13.5),
+              ),
             ],
           ),
         ),
@@ -800,21 +1043,28 @@ class _MovementsCard extends StatelessWidget {
           final i = e.key;
           final m = e.value;
           final isIn = m.type.toUpperCase() == 'IN';
-          final isLast = i == (movements.length < 10 ? movements.length - 1 : 9);
+          final isLast =
+              i == (movements.length < 10 ? movements.length - 1 : 9);
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     Container(
-                      width: 36, height: 36,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: isIn ? greenBg : AppColors.errorBg,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
-                        isIn ? Icons.south_west_rounded : Icons.north_east_rounded,
+                        isIn
+                            ? Icons.south_west_rounded
+                            : Icons.north_east_rounded,
                         color: isIn ? greenColor : AppColors.errorText,
                         size: 17,
                       ),
@@ -827,7 +1077,10 @@ class _MovementsCard extends StatelessWidget {
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: isIn ? greenBg : AppColors.errorBg,
                                   borderRadius: BorderRadius.circular(4),
@@ -837,7 +1090,9 @@ class _MovementsCard extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
-                                    color: isIn ? greenColor : AppColors.errorText,
+                                    color: isIn
+                                        ? greenColor
+                                        : AppColors.errorText,
                                   ),
                                 ),
                               ),
@@ -854,8 +1109,11 @@ class _MovementsCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${_fmt(m.createdAt)}${m.note.isNotEmpty ? '  ·  ${m.note}' : ''}',
-                            style: const TextStyle(fontSize: 11.5, color: AppColors.textMedium),
+                            '${_fmt(m.createdAt)}${(m.note?.isNotEmpty ?? false) ? '  ·  ${m.note}' : ''}',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.textMedium,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -865,8 +1123,13 @@ class _MovementsCard extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('after',
-                            style: TextStyle(fontSize: 10, color: AppColors.textLight)),
+                        const Text(
+                          'after',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textLight,
+                          ),
+                        ),
                         Text(
                           '${m.stockAfter}',
                           style: const TextStyle(
@@ -882,9 +1145,12 @@ class _MovementsCard extends StatelessWidget {
               ),
               if (!isLast)
                 const Divider(
-                    height: 1, thickness: 1,
-                    color: AppColors.borderColor,
-                    indent: 62, endIndent: 16),
+                  height: 1,
+                  thickness: 1,
+                  color: AppColors.borderColor,
+                  indent: 62,
+                  endIndent: 16,
+                ),
             ],
           );
         }).toList(),
@@ -905,7 +1171,11 @@ class _BottomActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(
-          16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
+        16,
+        12,
+        16,
+        12 + MediaQuery.of(context).padding.bottom,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: AppColors.borderColor)),
@@ -968,7 +1238,9 @@ class _ActionBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOutline = variant == _BtnVariant.outline;
-    final fgColor = isOutline ? AppColors.textDark : (textColor ?? Colors.white);
+    final fgColor = isOutline
+        ? AppColors.textDark
+        : (textColor ?? Colors.white);
     return SizedBox(
       height: 48,
       child: Material(
@@ -981,7 +1253,10 @@ class _ActionBtn extends StatelessWidget {
             decoration: isOutline
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.borderColor, width: 1.5),
+                    border: Border.all(
+                      color: AppColors.borderColor,
+                      width: 1.5,
+                    ),
                   )
                 : null,
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1062,7 +1337,11 @@ class _ProductDetailImageState extends State<_ProductDetailImage> {
           return const SizedBox.shrink();
         }
         return const Center(
-          child: Icon(Icons.inventory_2_outlined, size: 48, color: AppColors.textLight),
+          child: Icon(
+            Icons.inventory_2_outlined,
+            size: 48,
+            color: AppColors.textLight,
+          ),
         );
       },
     );

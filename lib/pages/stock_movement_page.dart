@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/inventory_page.dart';
 import 'package:inventory_app_project/pages/orders/order_page.dart';
@@ -10,12 +11,18 @@ import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
+import 'package:inventory_app_project/widgets/page_loading_view.dart';
 import 'package:inventory_app_project/widgets/quick_actions_section.dart';
 
 class StockMovementPage extends StatefulWidget {
   final bool showBottomNav;
+  final int refreshTick;
 
-  const StockMovementPage({super.key, this.showBottomNav = true});
+  const StockMovementPage({
+    super.key,
+    this.showBottomNav = true,
+    this.refreshTick = 0,
+  });
 
   @override
   State<StockMovementPage> createState() => _StockMovementPageState();
@@ -39,6 +46,14 @@ class _StockMovementPageState extends State<StockMovementPage> {
     _loadData();
   }
 
+  @override
+  void didUpdateWidget(covariant StockMovementPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshTick != widget.refreshTick) {
+      _loadData();
+    }
+  }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -59,9 +74,7 @@ class _StockMovementPageState extends State<StockMovementPage> {
 
       setState(() {
         _movements = movements;
-        _productsById = {
-          for (final p in products) p.id: p,
-        };
+        _productsById = {for (final p in products) p.id: p};
         _isLoading = false;
       });
     } catch (e) {
@@ -101,8 +114,9 @@ class _StockMovementPageState extends State<StockMovementPage> {
     await Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => InventoryPage(
-          initialQuickAction:
-              stockIn ? InventoryQuickAction.stockIn : InventoryQuickAction.stockOut,
+          initialQuickAction: stockIn
+              ? InventoryQuickAction.stockIn
+              : InventoryQuickAction.stockOut,
         ),
       ),
     );
@@ -128,25 +142,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
   }
 
   void _onBottomNavChanged(BuildContext context, int index) {
-    final Widget page;
-    switch (index) {
-      case 0:
-        page = const HomePage();
-      case 1:
-        page = const InventoryPage();
-      case 2:
-        page = const OrderPage();
-      case 3:
-        return;
-      case 4:
-        page = const SettingPage();
-      default:
-        return;
-    }
-
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    if (index == 3) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => AppShellPage(initialIndex: index)),
+    );
   }
 
   Widget _buildQuickCards() {
@@ -186,7 +185,9 @@ class _StockMovementPageState extends State<StockMovementPage> {
           backgroundColor: AppColors.darkSurface,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
         child: const Row(
           children: [
@@ -233,7 +234,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
               height: 48,
               color: AppColors.iconBgLight,
               child: imageUrl == null
-                  ? const Icon(Icons.inventory_2_outlined, color: AppColors.textLight)
+                  ? const Icon(
+                      Icons.inventory_2_outlined,
+                      color: AppColors.textLight,
+                    )
                   : Image.network(
                       imageUrl,
                       fit: BoxFit.cover,
@@ -291,7 +295,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: isIn
                             ? const Color(0xFFEAF5DF)
@@ -310,7 +317,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
                     const Spacer(),
                     Text(
                       _timeAgo(movement.createdAt),
-                      style: const TextStyle(fontSize: 11, color: AppColors.textMedium),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMedium,
+                      ),
                     ),
                   ],
                 ),
@@ -324,7 +334,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return PageLoadingView(
+        itemCount: 4,
+        topPadding: MediaQuery.of(context).padding.top + 8,
+      );
     }
 
     if (_error != null) {
@@ -334,7 +347,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: AppColors.errorText),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.errorText,
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Failed to load stock movements',
@@ -362,7 +378,12 @@ class _StockMovementPageState extends State<StockMovementPage> {
     return RefreshIndicator(
       onRefresh: _loadData,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.of(context).padding.top + 8,
+          16,
+          120,
+        ),
         children: [
           Row(
             children: [
@@ -373,7 +394,10 @@ class _StockMovementPageState extends State<StockMovementPage> {
                   color: AppColors.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.swap_vert_rounded, color: Color(0xFFC87F2E)),
+                child: const Icon(
+                  Icons.swap_vert_rounded,
+                  color: Color(0xFFC87F2E),
+                ),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -390,15 +414,13 @@ class _StockMovementPageState extends State<StockMovementPage> {
                     ),
                     Text(
                       'Inventory flow overview',
-                      style: TextStyle(fontSize: 12, color: AppColors.textMedium),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMedium,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              IconButton(
-                onPressed: _loadData,
-                icon: const Icon(Icons.refresh_rounded),
-                tooltip: 'Reload',
               ),
             ],
           ),
@@ -455,10 +477,7 @@ class _StockMovementPageState extends State<StockMovementPage> {
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: _loadData,
-                child: const Text('Refresh'),
-              ),
+              TextButton(onPressed: _loadData, child: const Text('Refresh')),
             ],
           ),
           const SizedBox(height: 8),

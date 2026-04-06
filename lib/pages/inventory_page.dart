@@ -7,6 +7,7 @@ import 'package:inventory_app_project/models/order_model.dart';
 import 'package:inventory_app_project/models/product_model.dart';
 import 'package:inventory_app_project/models/stock_movement_model.dart';
 import 'package:inventory_app_project/models/supplier_model.dart';
+import 'package:inventory_app_project/pages/app_shell_page.dart';
 import 'package:inventory_app_project/pages/categories/add_category_dialog.dart';
 import 'package:inventory_app_project/pages/home_page.dart';
 import 'package:inventory_app_project/pages/orders/order_page.dart';
@@ -26,6 +27,7 @@ import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
 import 'package:inventory_app_project/widgets/bottom_navigation.dart';
+import 'package:inventory_app_project/widgets/page_loading_view.dart';
 import 'package:inventory_app_project/widgets/quick_actions_section.dart';
 
 class InventoryPage extends StatefulWidget {
@@ -34,6 +36,7 @@ class InventoryPage extends StatefulWidget {
   final String? initialSearchQuery;
   final String? initialStockBarcode;
   final String? initialOpenProductBarcode;
+  final int refreshTick;
 
   const InventoryPage({
     super.key,
@@ -42,6 +45,7 @@ class InventoryPage extends StatefulWidget {
     this.initialSearchQuery,
     this.initialStockBarcode,
     this.initialOpenProductBarcode,
+    this.refreshTick = 0,
   });
 
   @override
@@ -83,6 +87,7 @@ class _InventoryPageState extends State<InventoryPage> {
   Map<int, CategoryModel> _categoriesById = const {};
   String _searchQuery = '';
   String _selectedFilter = 'All Categories';
+  String _selectedStockStatus = 'All Status';
   bool _didRunInitialQuickAction = false;
   bool _didOpenInitialProductDetail = false;
 
@@ -90,6 +95,13 @@ class _InventoryPageState extends State<InventoryPage> {
     final names = _categoriesById.values.map((c) => c.name).toList()..sort();
     return <String>['All Categories', ...names];
   }
+
+  List<String> get _stockStatusFilters => const <String>[
+    'All Status',
+    'In Stock',
+    'Low Stock',
+    'Out of Stock',
+  ];
 
   @override
   void initState() {
@@ -100,6 +112,14 @@ class _InventoryPageState extends State<InventoryPage> {
       _searchController.text = initialQuery;
     }
     _loadInventory();
+  }
+
+  @override
+  void didUpdateWidget(covariant InventoryPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshTick != widget.refreshTick) {
+      _loadInventory();
+    }
   }
 
   @override
@@ -126,13 +146,17 @@ class _InventoryPageState extends State<InventoryPage> {
     }
 
     try {
-      inventories = await _inventoryService.getInventoriesByStoreId(_defaultStoreId);
+      inventories = await _inventoryService.getInventoriesByStoreId(
+        _defaultStoreId,
+      );
     } catch (e) {
       errors.add('inventories: $e');
     }
 
     try {
-      categories = await _categoryService.getCategoriesByStoreId(_defaultStoreId);
+      categories = await _categoryService.getCategoriesByStoreId(
+        _defaultStoreId,
+      );
     } catch (e) {
       errors.add('categories: $e');
       debugPrint('Failed to fetch categories: $e');
@@ -148,17 +172,20 @@ class _InventoryPageState extends State<InventoryPage> {
     };
 
     final items = products
-        .map((product) => _InventoryItem(
-              product: product,
-              inventory: inventoryByProductId[product.id],
-            ))
+        .map(
+          (product) => _InventoryItem(
+            product: product,
+            inventory: inventoryByProductId[product.id],
+          ),
+        )
         .toList();
 
     setState(() {
       _items = items;
       _categoriesById = categoriesById;
       _error = errors.isEmpty ? null : errors.first;
-      if (_selectedFilter != 'All Categories' && !_filters.contains(_selectedFilter)) {
+      if (_selectedFilter != 'All Categories' &&
+          !_filters.contains(_selectedFilter)) {
         _selectedFilter = 'All Categories';
       }
       _isLoading = false;
@@ -181,7 +208,9 @@ class _InventoryPageState extends State<InventoryPage> {
         _InventoryItem? matchedItem;
         for (final item in _items) {
           final barcode = item.product.barcode?.trim();
-          if (barcode != null && barcode.isNotEmpty && barcode == initialOpenBarcode) {
+          if (barcode != null &&
+              barcode.isNotEmpty &&
+              barcode == initialOpenBarcode) {
             matchedItem = item;
             break;
           }
@@ -189,7 +218,11 @@ class _InventoryPageState extends State<InventoryPage> {
 
         if (matchedItem == null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Product with barcode "$initialOpenBarcode" not found.')),
+            SnackBar(
+              content: Text(
+                'Product with barcode "$initialOpenBarcode" not found.',
+              ),
+            ),
           );
           return;
         }
@@ -242,9 +275,9 @@ class _InventoryPageState extends State<InventoryPage> {
       await _loadInventory();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete product: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete product: $e')));
     }
   }
 
@@ -257,9 +290,9 @@ class _InventoryPageState extends State<InventoryPage> {
 
     if (!result.created) {
       if (result.message != null && result.message!.trim().isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message!)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message!)));
       }
       return;
     }
@@ -268,7 +301,11 @@ class _InventoryPageState extends State<InventoryPage> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.message ?? 'Item added to warehouse successfully.')),
+      SnackBar(
+        content: Text(
+          result.message ?? 'Item added to warehouse successfully.',
+        ),
+      ),
     );
   }
 
@@ -284,7 +321,9 @@ class _InventoryPageState extends State<InventoryPage> {
     }
 
     try {
-      final existing = await _categoryService.getCategoriesByStoreId(_defaultStoreId);
+      final existing = await _categoryService.getCategoriesByStoreId(
+        _defaultStoreId,
+      );
       final maxId = existing.isEmpty
           ? 0
           : existing.map((c) => c.id).reduce((a, b) => a > b ? a : b);
@@ -302,9 +341,9 @@ class _InventoryPageState extends State<InventoryPage> {
       await _loadInventory();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to add category: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to add category: $e')));
     }
   }
 
@@ -336,9 +375,9 @@ class _InventoryPageState extends State<InventoryPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to add supplier: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to add supplier: $e')));
     }
   }
 
@@ -358,7 +397,9 @@ class _InventoryPageState extends State<InventoryPage> {
       _InventoryItem? matched;
       for (final item in _items) {
         final barcode = item.product.barcode?.trim();
-        if (barcode != null && barcode.isNotEmpty && barcode == normalizedBarcode) {
+        if (barcode != null &&
+            barcode.isNotEmpty &&
+            barcode == normalizedBarcode) {
           matched = item;
           break;
         }
@@ -372,7 +413,9 @@ class _InventoryPageState extends State<InventoryPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Barcode "$normalizedBarcode" not found. Please select product manually.'),
+          content: Text(
+            'Barcode "$normalizedBarcode" not found. Please select product manually.',
+          ),
         ),
       );
     }
@@ -388,8 +431,13 @@ class _InventoryPageState extends State<InventoryPage> {
               child: Row(
                 children: [
                   Text(
-                    isStockIn ? 'Select Product for Stock In' : 'Select Product for Stock Out',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                    isStockIn
+                        ? 'Select Product for Stock In'
+                        : 'Select Product for Stock Out',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
                   ),
                 ],
               ),
@@ -403,7 +451,9 @@ class _InventoryPageState extends State<InventoryPage> {
                   final item = _items[index];
                   return ListTile(
                     title: Text(item.product.name),
-                    subtitle: Text('${_resolveCategoryName(item.product)} • ${item.stockQuantity} unit'),
+                    subtitle: Text(
+                      '${_resolveCategoryName(item.product)} • ${item.stockQuantity} unit',
+                    ),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => Navigator.of(context).pop(item),
                   );
@@ -447,11 +497,14 @@ class _InventoryPageState extends State<InventoryPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Order added successfully.')),
       );
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const AppShellPage(initialIndex: 2)),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to add order: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to add order: $e')));
     }
   }
 
@@ -488,8 +541,8 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
-  Future<void> _editProduct(_InventoryItem item) async {
-    await EditProductDialog.show(
+  Future<ProductDetailUpdate?> _editProduct(_InventoryItem item) async {
+    final isUpdated = await EditProductDialog.show(
       context,
       product: item.product,
       inventory: item.inventory,
@@ -497,6 +550,57 @@ class _InventoryPageState extends State<InventoryPage> {
       inventoryService: _inventoryService,
       categoriesById: _categoriesById,
       onUpdated: _loadInventory,
+    );
+
+    if (!isUpdated || !mounted) {
+      return null;
+    }
+
+    _InventoryItem? updatedItem;
+    for (final candidate in _items) {
+      if (candidate.product.id == item.product.id) {
+        updatedItem = candidate;
+        break;
+      }
+    }
+    if (updatedItem == null) {
+      return null;
+    }
+
+    dynamic supplier;
+    dynamic category;
+    if (updatedItem.product.supplierId != null) {
+      try {
+        supplier = await _supplierService.getSupplierById(
+          updatedItem.product.supplierId!,
+        );
+      } catch (e) {
+        debugPrint('Failed to fetch updated supplier: $e');
+      }
+    }
+
+    if (updatedItem.product.categoryId != null) {
+      final categoryId = updatedItem.product.categoryId!;
+      category = _categoriesById[categoryId];
+      if (category == null) {
+        try {
+          category = await _categoryService.getCategoryById(categoryId);
+        } catch (e) {
+          debugPrint('Failed to fetch updated category by id $categoryId: $e');
+        }
+      }
+    }
+
+    if (!mounted) {
+      return null;
+    }
+
+    return ProductDetailUpdate(
+      product: updatedItem.product,
+      inventory: updatedItem.inventory,
+      category: category,
+      categoryNameOverride: _resolveCategoryName(updatedItem.product),
+      supplier: supplier,
     );
   }
 
@@ -550,10 +654,10 @@ class _InventoryPageState extends State<InventoryPage> {
         stockAfter: newStock,
         reason: input.reason,
         note: input.note.isNotEmpty
-          ? input.note
+            ? input.note
             : (isStockIn
-                ? 'Manual stock in from product detail'
-                : 'Manual stock out from product detail'),
+                  ? 'Manual stock in from product detail'
+                  : 'Manual stock out from product detail'),
         storeId: inventory.storeId,
       );
 
@@ -561,18 +665,18 @@ class _InventoryPageState extends State<InventoryPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isStockIn ? 'Stock added successfully.' : 'Stock reduced successfully.',
+            isStockIn
+                ? 'Stock added successfully.'
+                : 'Stock reduced successfully.',
           ),
         ),
       );
       await _loadInventory();
-      if (!mounted) return;
-      Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update stock: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update stock: $e')));
     }
   }
 
@@ -584,7 +688,9 @@ class _InventoryPageState extends State<InventoryPage> {
 
       if (item.product.supplierId != null) {
         try {
-          supplier = await _supplierService.getSupplierById(item.product.supplierId!);
+          supplier = await _supplierService.getSupplierById(
+            item.product.supplierId!,
+          );
         } catch (e) {
           debugPrint('Failed to fetch supplier: $e');
         }
@@ -622,8 +728,6 @@ class _InventoryPageState extends State<InventoryPage> {
             supplier: supplier,
             recentMovements: recentMovements,
             onEdit: () => _editProduct(item),
-            onStockIn: () => _changeStock(item: item, isStockIn: true),
-            onStockOut: () => _changeStock(item: item, isStockIn: false),
             onDelete: () => _deleteProduct(item),
           ),
         ),
@@ -631,38 +735,36 @@ class _InventoryPageState extends State<InventoryPage> {
     } catch (e) {
       if (!mounted) return;
       debugPrint('Error navigating to product detail: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     }
   }
 
   void _onBottomNavChanged(BuildContext context, int index) {
-    final Widget page;
-    switch (index) {
-      case 0:
-        page = const HomePage();
-      case 1:
-        return;
-      case 2:
-        page = const OrderPage();
-      case 3:
-        page = const StockMovementPage();
-      case 4:
-        page = const SettingPage();
-      default:
-        return;
-    }
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => page));
+    if (index == 1) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => AppShellPage(initialIndex: index)),
+    );
   }
 
   List<_InventoryItem> get _visibleItems {
     final query = _searchQuery.trim().toLowerCase();
     return _items.where((item) {
-      final nameMatches = query.isEmpty ||
+      final nameMatches =
+          query.isEmpty ||
           item.product.name.toLowerCase().contains(query) ||
           (item.product.barcode?.toLowerCase().contains(query) ?? false);
       if (!nameMatches) return false;
+
+      final stockStatusMatches = switch (_selectedStockStatus) {
+        'All Status' => true,
+        'In Stock' => item.stockStatus == _StockStatus.inStock,
+        'Low Stock' => item.stockStatus == _StockStatus.low,
+        'Out of Stock' => item.stockStatus == _StockStatus.out,
+        _ => true,
+      };
+      if (!stockStatusMatches) return false;
 
       if (_selectedFilter == 'All Categories') {
         return true;
@@ -674,20 +776,20 @@ class _InventoryPageState extends State<InventoryPage> {
 
   Color _statusBg(_StockStatus status) => switch (status) {
     _StockStatus.inStock => const Color(0xFFFFF7ED),
-    _StockStatus.low     => const Color(0xFFFFEDD5),
-    _StockStatus.out     => const Color(0xFFFEE2E2),
+    _StockStatus.low => const Color(0xFFFFEDD5),
+    _StockStatus.out => const Color(0xFFFEE2E2),
   };
 
   Color _statusText(_StockStatus status) => switch (status) {
     _StockStatus.inStock => const Color(0xFFB45309),
-    _StockStatus.low     => const Color(0xFFEA580C),
-    _StockStatus.out     => const Color(0xFFDC2626),
+    _StockStatus.low => const Color(0xFFEA580C),
+    _StockStatus.out => const Color(0xFFDC2626),
   };
 
   String _statusLabel(_StockStatus status) => switch (status) {
     _StockStatus.inStock => 'In Stock',
-    _StockStatus.low     => 'Low Stock',
-    _StockStatus.out     => 'Out of Stock',
+    _StockStatus.low => 'Low Stock',
+    _StockStatus.out => 'Out of Stock',
   };
 
   // ── Header (without add button) ─────────────────────────────────────────
@@ -731,17 +833,13 @@ class _InventoryPageState extends State<InventoryPage> {
                     ),
                     Text(
                       'Main Warehouse',
-                      style: TextStyle(fontSize: 12, color: AppColors.textMedium),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMedium,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              // Refresh button
-              IconButton(
-                onPressed: _loadInventory,
-                icon: const Icon(Icons.refresh_rounded),
-                tooltip: 'Reload',
-                color: AppColors.textMedium,
               ),
               Container(
                 width: 38,
@@ -807,6 +905,35 @@ class _InventoryPageState extends State<InventoryPage> {
               }).toList(),
             ),
           ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: _selectedStockStatus,
+            isExpanded: true,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.borderColor),
+              ),
+            ),
+            items: _stockStatusFilters
+                .map(
+                  (status) => DropdownMenuItem<String>(
+                    value: status,
+                    child: Text(status),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _selectedStockStatus = value);
+            },
+          ),
         ],
       ),
     );
@@ -814,7 +941,7 @@ class _InventoryPageState extends State<InventoryPage> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const PageLoadingView(itemCount: 5, topPadding: 16);
     }
 
     if (_error != null) {
@@ -836,7 +963,10 @@ class _InventoryPageState extends State<InventoryPage> {
                   _error!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, color: AppColors.errorDark),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.errorDark,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -885,7 +1015,7 @@ class _InventoryPageState extends State<InventoryPage> {
         final status = item.stockStatus;
         final imageUrl = _imageService.resolveImageUrl(item.product.imageUrl);
         final proxyUrl = imageUrl != null
-          ? _imageService.proxyImageUrl(imageUrl)
+            ? _imageService.proxyImageUrl(imageUrl)
             : null;
 
         return InkWell(
@@ -947,7 +1077,9 @@ class _InventoryPageState extends State<InventoryPage> {
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: _statusBg(status),
                               borderRadius: BorderRadius.circular(999),
@@ -967,7 +1099,9 @@ class _InventoryPageState extends State<InventoryPage> {
                       Text(
                         '${_resolveCategoryName(item.product)} • ${item.stockQuantity} units',
                         style: const TextStyle(
-                            fontSize: 12, color: AppColors.textMedium),
+                          fontSize: 12,
+                          color: AppColors.textMedium,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -1008,7 +1142,10 @@ class _InventoryPageState extends State<InventoryPage> {
                                 value: 'stock_in',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.arrow_downward_rounded, size: 18),
+                                    Icon(
+                                      Icons.arrow_downward_rounded,
+                                      size: 18,
+                                    ),
                                     SizedBox(width: 8),
                                     Text('Stock In'),
                                   ],
@@ -1028,9 +1165,18 @@ class _InventoryPageState extends State<InventoryPage> {
                                 value: 'delete',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFDC2626)),
+                                    Icon(
+                                      Icons.delete_outline_rounded,
+                                      size: 18,
+                                      color: Color(0xFFDC2626),
+                                    ),
                                     SizedBox(width: 8),
-                                    Text('Delete', style: TextStyle(color: Color(0xFFDC2626))),
+                                    Text(
+                                      'Delete',
+                                      style: TextStyle(
+                                        color: Color(0xFFDC2626),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1101,7 +1247,7 @@ class _InventoryItem {
   const _InventoryItem({required this.product, required this.inventory});
 
   int get stockQuantity => inventory?.stockQuantity ?? 0;
-  int get sellingPrice  => inventory?.sellingPrice ?? 0;
+  int get sellingPrice => inventory?.sellingPrice ?? 0;
 
   _StockStatus get stockStatus {
     if (stockQuantity <= 0) return _StockStatus.out;

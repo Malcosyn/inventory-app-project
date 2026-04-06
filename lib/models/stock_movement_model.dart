@@ -1,8 +1,12 @@
 import 'dart:convert';
 
-List<StockMovementModel> stockMovementModelFromJson(String str) => List<StockMovementModel>.from(json.decode(str).map((x) => StockMovementModel.fromJson(x)));
+List<StockMovementModel> stockMovementModelFromJson(String str) =>
+    List<StockMovementModel>.from(
+      json.decode(str).map((x) => StockMovementModel.fromJson(x)),
+    );
 
-String stockMovementModelToJson(List<StockMovementModel> data) => json.encode(List<dynamic>.from(data.map((x) => x.toJson())));
+String stockMovementModelToJson(List<StockMovementModel> data) =>
+    json.encode(List<dynamic>.from(data.map((x) => x.toJson())));
 
 class StockMovementModel {
   String id;
@@ -11,7 +15,7 @@ class StockMovementModel {
   int quantity;
   int stockAfter;
   String reason;
-  String note;
+  String? note;
   DateTime createdAt;
   int storeId;
 
@@ -27,17 +31,18 @@ class StockMovementModel {
     required this.storeId,
   });
 
-  factory StockMovementModel.fromJson(Map<String, dynamic> json) => StockMovementModel(
-    id: json["id"],
-    productId: json["product_id"],
-    type: json["type"],
-    quantity: json["quantity"],
-    stockAfter: json["stock_after"],
-    reason: (json["reason"] ?? '').toString(),
-    note: json["note"],
-    createdAt: DateTime.parse(json["created_at"]),
-    storeId: json["store_id"],
-  );
+  factory StockMovementModel.fromJson(Map<String, dynamic> json) =>
+      StockMovementModel(
+        id: json["id"],
+        productId: json["product_id"],
+        type: json["type"],
+        quantity: json["quantity"],
+        stockAfter: json["stock_after"],
+        reason: (json["reason"] ?? '').toString(),
+        note: json["note"] == null ? null : json["note"].toString(),
+        createdAt: DateTime.parse(json["created_at"]),
+        storeId: json["store_id"],
+      );
 
   Map<String, dynamic> toJson() => {
     "id": id,
