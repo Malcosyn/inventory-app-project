@@ -9,6 +9,7 @@ import 'package:inventory_app_project/services/product_service.dart';
 import 'package:inventory_app_project/services/stock_movement_service.dart';
 import 'package:inventory_app_project/services/supplier_service.dart';
 import 'package:inventory_app_project/theme/app_theme.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 class AddProductDialogResult {
   final bool created;
@@ -91,7 +92,7 @@ class AddProductDialog {
       return const AddProductDialogResult(created: false);
     }
 
-    final nameError = productService.validateProductName(draft.name);
+    final nameError = ProductService.validateProductName(draft.name);
     if (nameError != null) {
       return AddProductDialogResult(created: false, message: nameError);
     }
@@ -190,6 +191,7 @@ class _AddProductSheetState extends State<_AddProductSheet> {
   Uint8List? _selectedImageBytes;
   bool _isUploadingImage = false;
   bool _hasSelectedImage = false;
+  bool _isScanningBarcode = false;
 
   @override
   void initState() {
@@ -292,6 +294,34 @@ class _AddProductSheetState extends State<_AddProductSheet> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<void> _scanBarcode() async {
+    if (_isScanningBarcode) return;
+
+    setState(() {
+      _isScanningBarcode = true;
+    });
+
+    final code = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.black,
+      builder: (_) => const _BarcodeScannerSheet(),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _isScanningBarcode = false;
+    });
+
+    final value = code?.trim();
+    if (value == null || value.isEmpty) return;
+
+    _barcodeController.text = value;
+    _showSnack('Barcode scanned successfully.', success: true);
   }
 
   void _save() {
@@ -410,6 +440,24 @@ class _AddProductSheetState extends State<_AddProductSheet> {
                             controller: _barcodeController,
                             hint: 'Scan or type manually',
                             icon: Icons.qr_code_rounded,
+                            suffixIcon: IconButton(
+                              onPressed: _isScanningBarcode
+                                  ? null
+                                  : _scanBarcode,
+                              tooltip: 'Scan barcode',
+                              icon: _isScanningBarcode
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.qr_code_scanner_rounded,
+                                      color: AppColors.primary,
+                                    ),
+                            ),
                           ),
                           const SizedBox(height: 14),
                           _ResponsiveTwoColumns(
@@ -716,6 +764,7 @@ class _InputField extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final String? prefixText;
   final String? suffixText;
+  final Widget? suffixIcon;
 
   const _InputField({
     required this.controller,
@@ -726,6 +775,7 @@ class _InputField extends StatelessWidget {
     this.inputFormatters,
     this.prefixText,
     this.suffixText,
+    this.suffixIcon,
   });
 
   @override
@@ -758,6 +808,7 @@ class _InputField extends StatelessWidget {
           color: AppColors.textLight,
           fontWeight: FontWeight.w600,
         ),
+        suffixIcon: suffixIcon,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 14,
@@ -769,6 +820,114 @@ class _InputField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
+        ),
+      ),
+    );
+  }
+}
+
+class _BarcodeScannerSheet extends StatefulWidget {
+  const _BarcodeScannerSheet();
+
+  @override
+  State<_BarcodeScannerSheet> createState() => _BarcodeScannerSheetState();
+}
+
+class _BarcodeScannerSheetState extends State<_BarcodeScannerSheet> {
+  late final MobileScannerController _scannerController;
+  bool _didCapture = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scannerController.dispose();
+    super.dispose();
+  }
+
+  void _handleDetect(BarcodeCapture capture) {
+    if (_didCapture) return;
+
+    for (final barcode in capture.barcodes) {
+      final value = barcode.rawValue?.trim();
+      if (value != null && value.isNotEmpty) {
+        _didCapture = true;
+        Navigator.of(context).pop(value);
+        return;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      heightFactor: 0.9,
+      child: Material(
+        color: Colors.black,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: MobileScanner(
+                controller: _scannerController,
+                onDetect: _handleDetect,
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              top: 16,
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    tooltip: 'Close',
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _scannerController.toggleTorch,
+                    icon: const Icon(
+                      Icons.flashlight_on_rounded,
+                      color: Colors.white,
+                    ),
+                    tooltip: 'Toggle flash',
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 24,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: const Text(
+                  'Arahkan kamera ke barcode produk untuk mengisi otomatis.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

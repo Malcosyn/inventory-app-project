@@ -73,7 +73,7 @@ class EditProductDialog {
 
     if (!context.mounted || draft == null) return false;
 
-    final validationMessage = productService.validateProductName(draft.name);
+    final validationMessage = ProductService.validateProductName(draft.name);
     if (validationMessage != null) {
       ScaffoldMessenger.of(
         context,
