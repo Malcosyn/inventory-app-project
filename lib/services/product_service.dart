@@ -133,12 +133,11 @@ class ProductService {
     );
   }
 
-  String? validateProductName(String name) {
-    if (name.trim().isEmpty) {
-      return 'Product name cannot be empty.';
-    }
-    return null;
-  }
+// Tambah static
+static String? validateProductName(String name) {
+  if (name.trim().isEmpty) return 'Product name cannot be empty.';
+  return null;
+}
 
   ProductModel buildUpdatedProduct({
     required ProductModel original,
